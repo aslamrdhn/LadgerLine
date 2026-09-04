@@ -1,0 +1,6 @@
+{
+  "name": "LedgerLine by Aslam",
+  "description": "Sistem Kasir POS Premium & Ekosistem Rantai Pasok Kopi Berkeadilan oleh LedgerLine. Dilengkapi penataan struk, e-Faktur Pajak, Margin Shield, dan optimasi digital lengkap.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,33 @@
+288:  const [appConfig, setAppConfig] = useState<any>({});
+326:    const baseFund = appConfig.cashRegisterFund !== undefined ? appConfig.cashRegisterFund : 500000;
+340:  }, [orders, products, appConfig.cashRegisterFund]);
+343:    if (!currentStore || (appConfig?.ledgerTokenBalance || 0) < cost) {
+395:          const finalConfig = data.appConfig && Object.keys(data.appConfig).length > 0 ? data.appConfig : (storeConfig ? JSON.parse(storeConfig) : { ...data.appConfig, ...currentStore });
+413:          const finalConfig = data.appConfig || {};
+538:    if (currentStore && loadedStoreIdRef.current === currentStore.id && appConfig && Object.keys(appConfig).length > 0) {
+539:      localStorage.setItem(`store_config_${currentStore.id}`, JSON.stringify(appConfig));
+541:  }, [appConfig, currentStore]);
+640:          localStorage.setItem(`store_config_${sId}`, JSON.stringify(data.state.appConfig || {}));
+663:  const currentTheme = appConfig.theme || 'slate';
+754:      appBg: appConfig.customThemeAppBg || 'bg-[#F8FAFC]',
+755:      asideBg: appConfig.customThemeAsideBg || 'bg-[#1E293B]',
+756:      border: appConfig.customThemeBorder || 'border-slate-800/85',
+757:      activeTab: appConfig.customThemeActiveTab || 'bg-blue-600/20 text-blue-450 text-blue-400 border border-blue-500/20 font-extrabold shadow-sm',
+758:      inactiveTab: appConfig.customThemeInactiveTab || 'text-slate-400 hover:bg-white/5 hover:text-white',
+759:      headerBg: appConfig.customThemeHeaderBg || 'bg-white border-slate-200',
+760:      headerText: appConfig.customThemeHeaderText || 'text-slate-700',
+761:      accentText: appConfig.customThemeAccentText || 'text-amber-400',
+762:      accentBtn: appConfig.customThemeAccentBtn || 'bg-emerald-500 hover:bg-emerald-600'
+936:                  ...(appConfig?.subscriptionTier === 'TIER_3' ? [{ id: 'tab-suplierhub', tab: 'suplierhub', name: 'Pasar Suplier B2B', icon: ShoppingCart, isIntel: true }] : []),
+944:                  ...(['TIER_2', 'TIER_3'].includes(appConfig?.subscriptionTier || 'TIER_1') ? [{ id: 'tab-meja', tab: 'meja', name: 'Barcode Meja QR', icon: QrCode }] : []),
+946:                  ...(appConfig?.subscriptionTier === 'TIER_3' ? [{ id: 'tab-suplierhub', tab: 'suplierhub', name: 'Ladgerline Supply Hub', icon: ShoppingCart, isIntel: true }] : []),
+1111:                  appConfig={appConfig}
+1140:                    appConfig={appConfig}
+1148:                    appConfig={appConfig}
+1160:                appConfig={appConfig}
+1170:                appConfig={appConfig}
+1182:                  appConfig={appConfig}
+1191:                appConfig={appConfig} 
+1272:                      <p className="text-3xl font-black text-slate-800 flex items-center gap-2"><Coins className="text-amber-500"/> {appConfig?.ledgerTokenBalance ?? 500} <span className="text-sm font-bold text-slate-400">Koin</span></p>
+1312:          <p>© 2026 {appConfig.storeName || 'LedgerLine by Aslam'} Hub. Hak Cipta Dilindungi Undang-Undang.</p>
+1450:           appConfig={appConfig}

@@ -1,0 +1,17 @@
+src/components/MarketIntelligence.tsx:66:  PlusCircle
+src/components/MarketIntelligence.tsx:933:                      <PlusCircle size={14}/> Tambah
+src/components/Cashier.tsx:12:  PlusCircle, 
+src/components/Cashier.tsx:1082:                          <PlusCircle size={12} />
+src/components/Inventory.tsx:11:  PlusCircle, 
+src/components/Inventory.tsx:884:              <PlusCircle size={14} />
+src/components/Inventory.tsx:1790:                            <PlusCircle size={12} />
+src/components/Inventory.tsx:2454:          <PlusCircle size={20} className="font-extrabold stroke-[3]" />
+src/components/TableOrders.tsx:15:  PlusCircle, 
+src/components/TableOrders.tsx:776:                                <button onClick={() => addCustomerItem(item.product)} className="p-0.5 hover:bg-slate-100 rounded text-slate-500"><PlusCircle size={10} /></button>
+src/components/StorefrontProfile.tsx:20:  PlusCircle,
+src/components/StorefrontProfile.tsx:1396:              <PlusCircle size={14} />
+src/components/StorefrontProfile.tsx:1463:                <PlusCircle size={14} className="stroke-[3]" />
+src/components/StorefrontProfile.tsx:2232:                    <PlusCircle size={14} /> Register Hubungan Baru
+src/components/StorefrontProfile.tsx:3307:                <PlusCircle size={16} className="text-emerald-500" />
+src/components/FinancialReports.tsx:38:  PlusCircle,
+src/components/FinancialReports.tsx:1603:              <PlusCircle className="text-indigo-600" size={18} />
