@@ -9,6 +9,7 @@ export interface CartItem {
   notes: string;
   variant?: 'HOT' | 'COOL';
   sugar?: 'LESS' | 'NORMAL';
+  discountAmount?: number;
 }
 
 interface CartStoreState {

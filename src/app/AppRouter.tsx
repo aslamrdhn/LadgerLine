@@ -10,6 +10,14 @@ const TableOrders = React.lazy(() => import('../components/TableOrders'));
 const FinancialReports = React.lazy(() => import('../components/FinancialReports'));
 const StorefrontProfile = React.lazy(() => import('../components/StorefrontProfile'));
 const ShiftHandover = React.lazy(() => import('../components/ShiftHandover'));
+const SupplierPortal = React.lazy(() => import('../components/SupplierPortal'));
+const DemandIntelligenceCenter = React.lazy(() => import('../components/DemandIntelligenceCenter'));
+const MarketIntelligence = React.lazy(() => import('../components/MarketIntelligence'));
+const BusinessAuditorUI = React.lazy(() => import('../components/BusinessAuditorUI'));
+const SubscriptionPackages = React.lazy(() => import('../components/SubscriptionPackages'));
+const SupplyHubAdmin = React.lazy(() => import('../components/SupplyHubAdmin'));
+const TrueCostDashboard = React.lazy(() => import('../components/TrueCostDashboard'));
+const MigrationCenter = React.lazy(() => import('../components/MigrationCenter'));
 const AdminDashboard = React.lazy(() => import('../components/admin/AdminDashboard'));
 
 interface AppRouterProps {
@@ -118,6 +126,11 @@ export function AppRouter({
         />
       )}
 
+      {activeTab === 'suplierhub' && <SupplierPortal onLogout={() => {}} />}
+            {activeTab === 'intelligence' && <DemandIntelligenceCenter />}
+      {activeTab === 'auditor' && <BusinessAuditorUI />}
+      {activeTab === 'paket' && <SubscriptionPackages />}
+      {activeTab === 'migrasi' && <MigrationCenter />}
       {activeTab === 'pengaturan' && (
         <StorefrontProfile 
           appConfig={appConfig || ({} as any)}

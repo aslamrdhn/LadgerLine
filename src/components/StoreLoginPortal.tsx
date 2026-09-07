@@ -69,7 +69,7 @@ export default function StoreLoginPortal({ tenants = [], onLogin, onRegister }: 
         }
       }
 
-      const response = await fetch('/api/google-auth', {
+      const response = await fetch('/api/auth/google-auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

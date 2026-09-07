@@ -144,9 +144,10 @@ export default function Cashier({ products, rawMaterials = [], recipes = [], tab
   const subtotal = React.useMemo(() => {
     return cart.reduce((sum, item) => {
       const isPromo = !!item.product.promoActive;
-      const itemPrice = isPromo 
+      const baseItemPrice = isPromo 
         ? Math.round(item.product.price * (1 - (item.product.promoDiscountPercent || 15) / 100)) 
         : item.product.price;
+      const itemPrice = Math.max(0, baseItemPrice - (item.discountAmount || 0));
       return sum + (itemPrice * item.quantity);
     }, 0);
   }, [cart]);
@@ -181,7 +182,12 @@ export default function Cashier({ products, rawMaterials = [], recipes = [], tab
   // Efek pengamat otomatis koneksi jaringan internet untuk mengunggah transaksi tertunda
   
   // Proses Checkout
-  const handleCheckout = async () => {
+  
+  // State for Split Bill
+  const [showSplitBill, setShowSplitBill] = useState(false);
+  const [splitPayments, setSplitPayments] = useState<{method: string, amount: string}[]>([{ method: 'CASH', amount: '' }]);
+
+  const handleCheckout = async (customPayments?: {method: string, amount: string}[]) => {
     if (cart.length === 0 || isCheckingOut) return;
     setIsCheckingOut(true);
 
@@ -230,18 +236,41 @@ export default function Cashier({ products, rawMaterials = [], recipes = [], tab
         throw new Error('Koneksi internet terputus (Offline)');
       }
 
+      
       const savedStore = localStorage.getItem('aslam_ledger_current_store');
       const tenantId = savedStore ? JSON.parse(savedStore).id : 'aslam-brew';
+      const outletId = savedStore ? JSON.parse(savedStore).outlets?.[0]?.id : 'outlet-1';
 
-      const response = await fetch('/api/checkout', {
+      // Transform to TCheckoutPayload
+      const checkoutPayload = {
+        outletId,
+        items: cart.map(item => ({
+          menuId: item.product.id,
+          quantity: item.quantity,
+          note: item.notes,
+          discountAmount: item.discountAmount || 0,
+          modifiers: item.variant ? [{ itemId: item.variant, quantity: 1, reason: 'extra' }] : []
+        })),
+        payments: customPayments ? customPayments.map(p => ({
+          method: p.method,
+          amount: parseFloat(p.amount || '0')
+        })) : [{
+          method: paymentMethod === 'Tunai' ? 'CASH' : paymentMethod === 'Midtrans' ? 'BANK_TRANSFER' : paymentMethod.toUpperCase(),
+          amount: totalBill
+        }],
+        discountPercent: discountPercent
+      };
+
+      const response = await fetch('/api/pos/checkout', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'X-Tenant-Id': tenantId,
           'Authorization': `Bearer ${localStorage.getItem('ledgerline_jwt_token')}`
         },
-        body: JSON.stringify(orderPayload)
+        body: JSON.stringify(checkoutPayload)
       });
+
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -714,7 +743,8 @@ return (
                 const salePrice = isPromo 
                   ? Math.round(item.product.price * (1 - (item.product.promoDiscountPercent || 15) / 100)) 
                   : item.product.price;
-                const totalRowPrice = salePrice * item.quantity;
+                const discountedPrice = Math.max(0, salePrice - (item.discountAmount || 0));
+                const totalRowPrice = discountedPrice * item.quantity;
                 
                 return (
                   <div key={item.product.id} className="flex justify-between items-start gap-4 text-xs">
@@ -807,7 +837,16 @@ return (
                 disabled={isCheckingOut}
                 onClick={async (e) => {
                   e.stopPropagation();
-                  await handleCheckout();
+                  if (paymentMethod === 'Split') {
+                    const totalPaid = splitPayments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+                    if (totalPaid < totalBill) {
+                      alert(`Total pembayaran (Rp ${totalPaid.toLocaleString('id-ID')}) belum mencukupi total tagihan (Rp ${totalBill.toLocaleString('id-ID')}).`);
+                      return;
+                    }
+                    await handleCheckout(splitPayments);
+                  } else {
+                    await handleCheckout();
+                  }
                   setShowBillPopup(false);
                 }}
                 className="h-14 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md shadow-emerald-500/15 transition-all cursor-pointer flex items-center justify-center gap-1.5 font-sans"

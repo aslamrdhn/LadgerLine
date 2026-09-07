@@ -82,7 +82,7 @@ export const useDataStore = create<DataStoreState>()(
 
         for (const order of offlineOrders) {
           try {
-            const response = await fetch('/api/checkout', {
+            const response = await fetch('/api/pos/checkout', {
               method: 'POST',
               headers: { 
                 'Content-Type': 'application/json',

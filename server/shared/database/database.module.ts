@@ -1,14 +1,12 @@
 import { PrismaClient } from '@prisma/client';
-import { env } from '../../env.ts';
-import { logger } from '../../logger.js';
-import { getPrismaClient } from '../../db.js';
+import { prisma } from '../../lib/prisma.ts';
 
 class DatabaseModule {
   /**
    * Mengembalikan instance Prisma Client (PostgreSQL) aman
    */
   public static getPrisma(): PrismaClient {
-    return getPrismaClient();
+    return prisma;
   }
 
   public static isPostgresAvailable(): boolean {

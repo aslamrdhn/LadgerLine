@@ -1,9 +1,11 @@
 {
   "projectId": "pro-cumulus-xmvz5",
-  "appId": "1:306958613280:web:2b5b09d18bb570e780f545",
-  "apiKey": "AIzaSyAqwBD1zlW2mzwkBhdLcAETZKoMI0f2Vog",
-  "authDomain": "pro-cumulus-xmvz5.firebaseapp.com",
-  "storageBucket": "pro-cumulus-xmvz5.firebasestorage.app",
-  "messagingSenderId": "306958613280",
-  "measurementId": ""
+  "appId": "1:1023581922723:web:f7d3f68a3e1fd8a0aa2616",
+  "apiKey": "AIzaSyCe9RyXPuWnA0E14ekFXlF-eQ3QOHvAfOw",
+  "authDomain": "gen-lang-client-0473057506.firebaseapp.com",
+  "storageBucket": "gen-lang-client-0473057506.firebasestorage.app",
+  "messagingSenderId": "1023581922723",
+  "measurementId": "",
+  "oAuthClientId": "1023581922723-2kaonfahbv6o612088nqusjmvmdguvt8.apps.googleusercontent.com",
+  "recaptchaSiteKey": ""
 }

@@ -183,7 +183,93 @@ export default function FinancialReports({ financeLogs, products, rawMaterials, 
     signaturesChecked: number;
   } | null>(null);
 
+  const [oAuthClientId, setOAuthClientId] = useState<string>('');
+  const [tokenClient, setTokenClient] = useState<any>(null);
+  const [isExportingDrive, setIsExportingDrive] = useState<boolean>(false);
+
   const activeTimersRef = React.useRef<{ timeouts: any[]; intervals: any[] }>({ timeouts: [], intervals: [] });
+
+  React.useEffect(() => {
+    fetch('/api/config')
+      .then(res => res.json())
+      .then(data => {
+        if (data.oAuthClientId) {
+          setOAuthClientId(data.oAuthClientId);
+        }
+      })
+      .catch(console.error);
+  }, []);
+
+  React.useEffect(() => {
+    if (oAuthClientId && (window as any).google) {
+      const client = (window as any).google.accounts.oauth2.initTokenClient({
+        client_id: oAuthClientId,
+        scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets',
+        callback: (response: any) => {
+          if (response.error !== undefined) {
+            alert('OAuth failed: ' + response.error);
+            setIsExportingDrive(false);
+            return;
+          }
+          executeGoogleDriveExport(response.access_token);
+        },
+      });
+      setTokenClient(client);
+    }
+  }, [oAuthClientId]);
+
+  const handleDriveExportClick = () => {
+    if (!tokenClient) {
+      alert("Google Identity Services not initialized yet.");
+      return;
+    }
+    setIsExportingDrive(true);
+    tokenClient.requestAccessToken({ prompt: 'consent' });
+  };
+
+  const executeGoogleDriveExport = async (accessToken: string) => {
+    try {
+      // Build rows (header + data)
+      const rows = [];
+      const storeName = appConfig.storeName || 'LEDGERLINE COFFEE';
+      rows.push(['LAPORAN KEUANGAN BUKU-KAS', storeName]);
+      rows.push(['Tipe', 'Keterangan', 'Kategori', 'Tanggal', 'Jumlah (IDR)']);
+
+      filteredLogs.forEach(log => {
+        rows.push([
+          log.type === 'income' ? 'Pemasukan' : 'Pengeluaran',
+          log.description || '-',
+          log.category || '-',
+          log.date + ' ' + log.time,
+          log.amount.toString()
+        ]);
+      });
+
+      const res = await fetch('/api/finance/export-drive', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          accessToken,
+          rows,
+          reportName: `Laporan Keuangan - ${new Date().toISOString().split('T')[0]}`
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        alert("Berhasil ekspor ke Google Drive!\nLink: " + data.data.webViewLink);
+      } else {
+        alert("Gagal ekspor: " + data.message);
+      }
+    } catch (error: any) {
+      alert("Terjadi kesalahan sistem: " + error.message);
+    } finally {
+      setIsExportingDrive(false);
+    }
+  };
 
   React.useEffect(() => {
     return () => {
@@ -764,14 +850,26 @@ export default function FinancialReports({ financeLogs, products, rawMaterials, 
           </p>
         </div>
         
-        <button
-          id="export-csv-btn"
-          onClick={downloadCSVReport}
-          className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 transition-all cursor-pointer shadow-md shadow-blue-500/10"
-        >
-          <Download size={14} />
-          Ekspor ke XLS / CSV Spreadsheet
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            id="export-drive-btn"
+            onClick={handleDriveExportClick}
+            disabled={isExportingDrive}
+            className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-400 text-white font-bold text-xs rounded-xl flex items-center gap-2 transition-all cursor-pointer shadow-md shadow-emerald-500/10"
+          >
+            {isExportingDrive ? <RefreshCw className="animate-spin" size={14} /> : <FileSpreadsheet size={14} />}
+            {isExportingDrive ? 'Mengekspor...' : 'Ekspor ke Google Drive'}
+          </button>
+
+          <button
+            id="export-csv-btn"
+            onClick={downloadCSVReport}
+            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 transition-all cursor-pointer shadow-md shadow-blue-500/10"
+          >
+            <Download size={14} />
+            Ekspor ke XLS / CSV
+          </button>
+        </div>
       </div>
 
       {/* PANEL FILTER OPERASIONAL & SIKLUS PERIODE LAPORAN */}

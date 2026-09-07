@@ -16,6 +16,8 @@ export const ERROR_CODES = {
   NUM_002: { code: 'NUM-002', status: 400, message: 'Number already used', category: 'VALIDATION' },
   REV_001: { code: 'REV-001', status: 403, message: 'Reversal not allowed', category: 'BUSINESS' },
   ARC_001: { code: 'ARC-001', status: 500, message: 'Google Drive upload failed', category: 'EXTERNAL' },
+  LOCK_001: { code: 'LOCK-001', status: 409, message: 'Optimistic locking conflict', category: 'SYSTEM' },
+  OPN_002: { code: 'OPN-002', status: 400, message: 'Surplus requires estimated unit cost or existing cost reference', category: 'VALIDATION' },
   SYS_001: { code: 'SYS-001', status: 500, message: 'Internal server error', category: 'SYSTEM' },
 } as const;
 
@@ -23,12 +25,13 @@ export class LedgerError extends Error {
   public readonly code: string;
   public readonly status: number;
   public readonly category: string;
-  constructor(code: keyof typeof ERROR_CODES, customMessage?: string) {
-    const err = ERROR_CODES[code];
-    super(customMessage || err.message);
-    this.code = err.code;
-    this.status = err.status;
-    this.category = err.category;
+
+  constructor(code: string, customMessage?: string) {
+    const err = (ERROR_CODES as Record<string, any>)[code];
+    super(customMessage || err?.message || code);
+    this.code = err?.code || code;
+    this.status = err?.status || (code.startsWith('LOCK') ? 409 : code.startsWith('INV') ? 400 : 500);
+    this.category = err?.category || 'SYSTEM';
     this.name = 'LedgerError';
   }
 }

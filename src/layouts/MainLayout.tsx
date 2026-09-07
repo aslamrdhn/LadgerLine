@@ -79,7 +79,12 @@ export function MainLayout({
         { id: 'tab-stok', tab: 'stok', name: 'Stok & Bahan Baku', icon: Layers },
         ...(['TIER_2', 'TIER_3'].includes(appConfig?.subscriptionTier || 'TIER_1') ? [{ id: 'tab-meja', tab: 'meja', name: 'Barcode Meja QR', icon: QrCode }] : []),
         { id: 'tab-laporan', tab: 'laporan', name: 'Laporan Keuangan', icon: FileBarChart2 },
-                      { id: 'tab-pengaturan', tab: 'pengaturan', name: 'Profil & Pengaturan', icon: Building2 },
+                      { id: 'tab-suplierhub', tab: 'suplierhub', name: 'Supplier Hub', icon: ShoppingCart },
+        { id: 'tab-intelligence', tab: 'intelligence', name: 'Market Intelligence', icon: Network },
+        { id: 'tab-auditor', tab: 'auditor', name: 'Business Auditor', icon: FileBarChart2 },
+        { id: 'tab-paket', tab: 'paket', name: 'Langganan & Lisensi', icon: Coins },
+        { id: 'tab-migrasi', tab: 'migrasi', name: 'Pusat Migrasi', icon: Network },
+        { id: 'tab-pengaturan', tab: 'pengaturan', name: 'Profil & Pengaturan', icon: Building2 },
              ];
 
   const userRole = isKasir ? 'Kasir' : (currentStore?.cashierRole === 'Owner' || currentStore?.cashierRole === 'Manager' ? 'Owner' : 'Other');
@@ -88,7 +93,7 @@ export function MainLayout({
     if (userRole === 'Kasir') {
       return ['kasir', 'meja'].includes(tab as string);
     } else if (userRole === 'Owner') {
-      return ['dashboard', 'laporan', 'stok', 'pengaturan'].includes(tab as string);
+      return ['dashboard', 'laporan', 'stok', 'suplierhub', 'intelligence', 'auditor', 'paket', 'migrasi', 'pengaturan'].includes(tab as string);
     }
     return true; // Superadmin or fallback
   });

@@ -8,6 +8,8 @@ import { InventoryRecipes } from './inventory/InventoryRecipes';
 import { AddProductModal } from './inventory/AddProductModal';
 import { AddMaterialModal } from './inventory/AddMaterialModal';
 import { WasteModal } from './inventory/WasteModal';
+import { StockOpnameTab } from './inventory/StockOpnameTab';
+import { ReturnSupplierTab } from './inventory/ReturnSupplierTab';
 
 
 interface InventoryProps {
@@ -20,7 +22,7 @@ interface InventoryProps {
 
 export default function Inventory({ products, rawMaterials, recipes = [], appConfig, onRefresh }: InventoryProps) {
   const { triggerToast } = useUiStore();
-  const [activeSubTab, setActiveSubTab] = useState<'products' | 'materials' | 'recipes' | 'promo' | 'simulator' | 'purchase_orders'>('products');
+  const [activeSubTab, setActiveSubTab] = useState<'products' | 'materials' | 'recipes' | 'promo' | 'simulator' | 'purchase_orders' | 'stock_opname' | 'returns'>('products');
   
   // Modals state
   const [showAddProductModal, setShowAddProductModal] = useState(false);
@@ -61,7 +63,8 @@ export default function Inventory({ products, rawMaterials, recipes = [], appCon
     { id: 'products', label: 'Menu Jual', icon: <Package size={16} /> },
     { id: 'materials', label: 'Bahan Baku', icon: <Layers size={16} /> },
     { id: 'recipes', label: 'Resep', icon: <BookOpen size={16} /> },
-    { id: 'simulator', label: 'Simulator', icon: <Activity size={16} /> },
+    { id: 'stock_opname', label: 'Stock Opname', icon: <Activity size={16} /> },
+    { id: 'returns', label: 'Retur Supplier', icon: <Tag size={16} /> },
     { id: 'purchase_orders', label: 'P.O', icon: <ShoppingCart size={16} /> },
   ] as const;
 
@@ -117,6 +120,12 @@ export default function Inventory({ products, rawMaterials, recipes = [], appCon
             rawMaterials={rawMaterials}
             recipes={recipes}
           />
+        )}
+        {activeSubTab === 'stock_opname' && (
+          <StockOpnameTab materials={rawMaterials} />
+        )}
+        {activeSubTab === 'returns' && (
+          <ReturnSupplierTab materials={rawMaterials} />
         )}
       </div>
 

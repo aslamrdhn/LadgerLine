@@ -10,7 +10,7 @@ export default function App() {
   const [visitorToken, setVisitorToken] = useState<string | null>(null);
   const { uiMode } = useUiMode();
   
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'kasir' | 'stok' | 'meja' | 'laporan' | 'pengaturan' | 'intelligence' | 'paket' | 'suplierhub' | 'auditor'>(uiMode === 'simple' ? 'kasir' : 'dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'kasir' | 'stok' | 'meja' | 'laporan' | 'pengaturan' | 'intelligence' | 'paket' | 'suplierhub' | 'auditor' | 'migrasi'>(uiMode === 'simple' ? 'kasir' : 'dashboard');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   
   const [currentStore, setCurrentStore] = useState<any>(() => {
