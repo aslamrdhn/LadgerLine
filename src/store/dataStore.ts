@@ -1,7 +1,15 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
-import { get, set, del } from 'idb-keyval';
-import { Product, RawMaterial, Order, FinanceLog, AppConfig, Recipe, CoffeeTable } from '../types';
+import { create } from "zustand";
+import { persist, createJSONStorage, StateStorage } from "zustand/middleware";
+import { get, set, del } from "idb-keyval";
+import {
+  Product,
+  RawMaterial,
+  Order,
+  FinanceLog,
+  AppConfig,
+  Recipe,
+  CoffeeTable,
+} from "../types";
 
 const idbStorage: StateStorage = {
   getItem: async (name: string): Promise<string | null> => {
@@ -64,57 +72,64 @@ export const useDataStore = create<DataStoreState>()(
       setTables: (tables) => set({ tables }),
       setIsSandbox: (isSandbox) => set({ isSandbox }),
 
-      addOrder: (order) => set((state) => ({ orders: [order, ...state.orders] })),
-      addFinanceLog: (log) => set((state) => ({ financeLogs: [log, ...state.financeLogs] })),
-      updateProductStock: (productId, quantityToDeduct) => set((state) => ({
-        products: state.products.map(p => 
-          p.id === productId ? { ...p, stock: Math.max(0, p.stock - quantityToDeduct) } : p
-        )
-      })),
-      
+      addOrder: (order) =>
+        set((state) => ({ orders: [order, ...state.orders] })),
+      addFinanceLog: (log) =>
+        set((state) => ({ financeLogs: [log, ...state.financeLogs] })),
+      updateProductStock: (productId, quantityToDeduct) =>
+        set((state) => ({
+          products: state.products.map((p) =>
+            p.id === productId
+              ? { ...p, stock: Math.max(0, p.stock - quantityToDeduct) }
+              : p,
+          ),
+        })),
+
       syncOfflineOrders: async () => {
         const state = get();
-        const offlineOrders = state.orders.filter(o => o.id.startsWith('TX-OFFLINE') && o.paymentStatus === 'Success');
+        const offlineOrders = state.orders.filter(
+          (o) => o.id.startsWith("TX-OFFLINE") && o.paymentStatus === "Success",
+        );
         if (offlineOrders.length === 0) return;
-        
-        const savedStore = localStorage.getItem('aslam_ledger_current_store');
-        const tenantId = savedStore ? JSON.parse(savedStore).id : 'aslam-brew';
+
+        const savedStore = localStorage.getItem("aslam_ledger_current_store");
+        const tenantId = savedStore ? JSON.parse(savedStore).id : "aslam-brew";
 
         for (const order of offlineOrders) {
           try {
-            const response = await fetch('/api/pos/checkout', {
-              method: 'POST',
-              headers: { 
-                'Content-Type': 'application/json',
-                'X-Tenant-Id': tenantId,
-                'Authorization': `Bearer ${localStorage.getItem('ledgerline_jwt_token')}`
+            const response = await fetch("/api/pos/checkout", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Tenant-Id": tenantId,
+                Authorization: `Bearer ${localStorage.getItem("ledgerline_jwt_token")}`,
               },
               body: JSON.stringify({
                 ...order,
                 id: undefined, // Let server generate real ID
-                isOfflineSync: true
-              })
+                isOfflineSync: true,
+              }),
             });
             if (response.ok) {
               const data = await response.json();
               if (data.success && data.order) {
                 // Replace offline order with real order from server
-                set(s => ({
-                  orders: s.orders.map(o => o.id === order.id ? data.order : o)
+                set((s) => ({
+                  orders: s.orders.map((o) =>
+                    o.id === order.id ? data.order : o,
+                  ),
                 }));
               }
             }
           } catch (err) {
-            console.error('Failed to sync offline order:', order.id, err);
+            console.error("Failed to sync offline order:", order.id, err);
           }
         }
-      }
+      },
     }),
     {
-      name: 'aslam-ledger-storage', // unique name
+      name: "aslam-ledger-storage", // unique name
       storage: createJSONStorage(() => idbStorage),
-    }
-  )
+    },
+  ),
 );
-
-

@@ -1,4 +1,4 @@
-import Redis from 'ioredis';
+import Redis from "ioredis";
 
 const REDIS_URL = process.env.REDIS_URL;
 
@@ -11,26 +11,33 @@ class RedisWrapper {
       try {
         this.client = new Redis(REDIS_URL, {
           maxRetriesPerRequest: 3,
-          retryStrategy: (times) => (times > 3 ? null : Math.min(times * 100, 2000)),
+          retryStrategy: (times) =>
+            times > 3 ? null : Math.min(times * 100, 2000),
           lazyConnect: true,
         });
 
-        this.client.connect().then(() => {
-          this.isConnected = true;
-          console.log('[REDIS] Connected to Redis server');
-        }).catch((err) => {
-          console.warn('[REDIS] Connection failed, using in-memory mock fallback:', err.message);
-          this.isConnected = false;
-        });
+        this.client
+          .connect()
+          .then(() => {
+            this.isConnected = true;
+            console.log("[REDIS] Connected to Redis server");
+          })
+          .catch((err) => {
+            console.log(
+              "[REDIS] Operating in in-memory mock fallback mode (connection closed).",
+              err.message,
+            );
+            this.isConnected = false;
+          });
 
-        this.client.on('error', (err) => {
+        this.client.on("error", (err) => {
           this.isConnected = false;
         });
       } catch (err) {
         this.client = null;
       }
     } else {
-      console.log('[REDIS] REDIS_URL not configured. Operating in mock mode.');
+      console.log("[REDIS] REDIS_URL not configured. Operating in mock mode.");
     }
   }
 
@@ -39,7 +46,10 @@ class RedisWrapper {
       try {
         return await this.client.publish(channel, message);
       } catch (err: any) {
-        console.warn(`[REDIS] Publish failed on channel ${channel}:`, err.message);
+        console.log(
+          `[REDIS] Publish failed on channel ${channel}:`,
+          err.message,
+        );
         return 0;
       }
     }
@@ -58,7 +68,12 @@ class RedisWrapper {
     return null;
   }
 
-  async set(key: string, value: string, mode?: string, duration?: number): Promise<string | null> {
+  async set(
+    key: string,
+    value: string,
+    mode?: string,
+    duration?: number,
+  ): Promise<string | null> {
     if (this.client && this.isConnected) {
       try {
         if (mode && duration) {
@@ -69,7 +84,7 @@ class RedisWrapper {
         return null;
       }
     }
-    return 'OK';
+    return "OK";
   }
 
   async del(key: string): Promise<number> {

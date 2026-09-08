@@ -1,6 +1,6 @@
-import React from 'react';
-import { RawMaterial } from '../../types';
-import { Edit, Trash2, Layers, AlertTriangle } from 'lucide-react';
+import React from "react";
+import { RawMaterial } from "../../types";
+import { Edit, Trash2, Layers, AlertTriangle } from "lucide-react";
 
 interface Props {
   materials: RawMaterial[];
@@ -10,15 +10,25 @@ interface Props {
   onWaste: (material: RawMaterial) => void;
 }
 
-export function InventoryMaterials({ materials, onDelete, onEdit, onAdd, onWaste }: Props) {
+export function InventoryMaterials({
+  materials,
+  onDelete,
+  onEdit,
+  onAdd,
+  onWaste,
+}: Props) {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
         <div>
-          <h2 className="text-lg font-black text-slate-800">Bahan Baku Mentah</h2>
-          <p className="text-xs text-slate-500">Kelola stok bahan baku untuk resep</p>
+          <h2 className="text-lg font-black text-slate-800">
+            Bahan Baku Mentah
+          </h2>
+          <p className="text-xs text-slate-500">
+            Kelola stok bahan baku untuk resep
+          </p>
         </div>
-        <button 
+        <button
           onClick={onAdd}
           className="px-4 py-2 bg-emerald-600 text-white font-bold rounded-xl text-sm shadow-md hover:bg-emerald-700"
         >
@@ -27,38 +37,57 @@ export function InventoryMaterials({ materials, onDelete, onEdit, onAdd, onWaste
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {materials.map(m => (
-          <div key={m.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3">
+        {materials.map((m) => (
+          <div
+            key={m.id}
+            className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3"
+          >
             <div className="flex justify-between items-start">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600">
                   <Layers size={18} />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-800 leading-tight">{m.name}</h3>
-                  <p className="text-[10px] text-slate-400 font-mono mt-0.5">ID: {m.id.split('-').pop()}</p>
+                  <h3 className="font-bold text-slate-800 leading-tight">
+                    {m.name}
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                    ID: {m.id.split("-").pop()}
+                  </p>
                 </div>
               </div>
               <div className="flex gap-1.5">
-                <button onClick={() => onWaste(m)} className="p-1.5 text-amber-600 bg-amber-50 rounded-lg hover:bg-amber-100" title="Catat Waste/Kerugian">
+                <button
+                  onClick={() => onWaste(m)}
+                  className="p-1.5 text-amber-600 bg-amber-50 rounded-lg hover:bg-amber-100"
+                  title="Catat Waste/Kerugian"
+                >
                   <AlertTriangle size={14} />
                 </button>
-                <button onClick={() => onEdit(m)} className="p-1.5 text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100">
+                <button
+                  onClick={() => onEdit(m)}
+                  className="p-1.5 text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100"
+                >
                   <Edit size={14} />
                 </button>
-                <button onClick={() => onDelete(m.id)} className="p-1.5 text-rose-600 bg-rose-50 rounded-lg hover:bg-rose-100">
+                <button
+                  onClick={() => onDelete(m.id)}
+                  className="p-1.5 text-rose-600 bg-rose-50 rounded-lg hover:bg-rose-100"
+                >
                   <Trash2 size={14} />
                 </button>
               </div>
             </div>
-            
+
             <div className="flex justify-between items-center text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-100">
               <span className="text-slate-500 font-medium">Sisa Stok:</span>
-              <span className={`font-mono font-bold text-sm ${m.stockQuantity <= (m.warningLimit || 0) ? 'text-rose-600' : 'text-slate-700'}`}>
-                {m.stockQuantity.toLocaleString('id-ID')} {m.stockUnit}
+              <span
+                className={`font-mono font-bold text-sm ${m.stockQuantity <= (m.warningLimit || 0) ? "text-rose-600" : "text-slate-700"}`}
+              >
+                {m.stockQuantity.toLocaleString("id-ID")} {m.stockUnit}
               </span>
             </div>
-            
+
             {m.stockQuantity <= (m.warningLimit || 0) && (
               <p className="text-[10px] font-bold text-rose-500 flex items-center gap-1">
                 <AlertTriangle size={10} /> Stok Menipis!

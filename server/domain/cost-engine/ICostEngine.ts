@@ -1,5 +1,5 @@
-import { Decimal } from 'decimal.js';
-import { PrismaTransaction } from '../../lib/prisma.ts';
+import { Decimal } from "decimal.js";
+import { PrismaTransaction } from "../../lib/prisma.ts";
 
 export interface IAllocationItem {
   itemId: string;
@@ -25,13 +25,17 @@ export interface IPurchaseCostResult {
 }
 
 export interface ICostEngine {
-  getCurrentUnitCost(itemId: string, tenantId: string, warehouseId: string): Promise<Decimal>;
+  getCurrentUnitCost(
+    itemId: string,
+    tenantId: string,
+    warehouseId: string,
+  ): Promise<Decimal>;
   allocateSalesCost(
     allocations: IAllocationItem[],
     salesId: string,
     tenantId: string,
     outletId: string,
-    tx?: PrismaTransaction
+    tx?: PrismaTransaction,
   ): Promise<IAllocateCostResult>;
   processPurchase(
     purchase: {
@@ -42,9 +46,13 @@ export interface ICostEngine {
       purchaseOrderId: string;
     },
     tenantId: string,
-    tx?: PrismaTransaction
+    tx?: PrismaTransaction,
   ): Promise<IPurchaseCostResult>;
-  rollbackSalesAllocation(salesId: string, tenantId: string, tx?: PrismaTransaction): Promise<void>;
+  rollbackSalesAllocation(
+    salesId: string,
+    tenantId: string,
+    tx?: PrismaTransaction,
+  ): Promise<void>;
   adjustStock(
     adjustment: {
       itemId: string;
@@ -54,6 +62,6 @@ export interface ICostEngine {
       unitCost?: Decimal;
     },
     tenantId: string,
-    tx?: PrismaTransaction
+    tx?: PrismaTransaction,
   ): Promise<void>;
 }

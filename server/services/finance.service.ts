@@ -1,7 +1,7 @@
-import { prisma } from '../lib/prisma.ts';
-import { Decimal } from '../utils/money.ts';
-import { LedgerError } from '../utils/errorCodes.ts';
-import { getBusinessDate } from '../utils/timezone.ts';
+import { prisma } from "../lib/prisma.ts";
+import { Decimal } from "../utils/money.ts";
+import { LedgerError } from "../utils/errorCodes.ts";
+import { getBusinessDate } from "../utils/timezone.ts";
 
 export class TrueHppService {
   async getDashboardPerformance(tenantId: string, date: Date) {
@@ -10,9 +10,12 @@ export class TrueHppService {
       select: { timezone: true },
     });
 
-    if (!tenant) throw new LedgerError('VAL-002', 'Tenant not found');
+    if (!tenant) throw new LedgerError("VAL-002", "Tenant not found");
 
-    const businessDate = getBusinessDate(tenant.timezone || 'Asia/Jakarta', date);
+    const businessDate = getBusinessDate(
+      tenant.timezone || "Asia/Jakarta",
+      date,
+    );
     const startOfDay = new Date(businessDate);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(startOfDay);
@@ -24,7 +27,7 @@ export class TrueHppService {
         date: { lt: startOfDay },
       },
       include: { menu: { select: { name: true } } },
-      orderBy: { date: 'desc' },
+      orderBy: { date: "desc" },
       take: 30,
     });
 
@@ -33,7 +36,7 @@ export class TrueHppService {
         sales: {
           tenantId,
           businessDate: { gte: startOfDay, lte: endOfDay },
-          status: { in: ['POSTED', 'LATE_ENTRY'] },
+          status: { in: ["POSTED", "LATE_ENTRY"] },
         },
       },
       include: {
@@ -74,20 +77,29 @@ export class TrueHppService {
       entry.directHpp += Number(detail.hpp || 0);
     }
 
-    const config = await prisma.costAllocationConfig.findUnique({ where: { tenantId } });
+    const config = await prisma.costAllocationConfig.findUnique({
+      where: { tenantId },
+    });
     const dailyOpex = config
       ? new Decimal(config.monthlyOperationalExpense.toString())
           .plus(config.monthlyLaborExpense.toString())
           .dividedBy(30)
       : new Decimal(0);
 
-    const totalTodayRevenue = Array.from(todayMap.values()).reduce((sum, e) => sum + e.revenue, 0);
+    const totalTodayRevenue = Array.from(todayMap.values()).reduce(
+      (sum, e) => sum + e.revenue,
+      0,
+    );
 
     for (const entry of todayMap.values()) {
-      const share = totalTodayRevenue > 0 ? entry.revenue / totalTodayRevenue : 0;
+      const share =
+        totalTodayRevenue > 0 ? entry.revenue / totalTodayRevenue : 0;
       entry.allocatedCost = dailyOpex.times(share).toNumber();
       entry.trueHpp = entry.directHpp + entry.allocatedCost;
-      entry.margin = entry.revenue > 0 ? ((entry.revenue - entry.trueHpp) / entry.revenue) * 100 : 0;
+      entry.margin =
+        entry.revenue > 0
+          ? ((entry.revenue - entry.trueHpp) / entry.revenue) * 100
+          : 0;
     }
 
     const todayArray = Array.from(todayMap.values());
@@ -102,7 +114,10 @@ export class TrueHppService {
       include: { menu: { select: { name: true } } },
     });
 
-    const yesterdayMap = new Map<string, { revenue: number; qty: number; margin: number }>();
+    const yesterdayMap = new Map<
+      string,
+      { revenue: number; qty: number; margin: number }
+    >();
     for (const stat of yesterdayStats) {
       yesterdayMap.set(stat.menuId, {
         revenue: Number(stat.totalRevenue),
@@ -116,7 +131,10 @@ export class TrueHppService {
       return {
         ...item,
         yesterdayRevenue: yest?.revenue || 0,
-        revenueChange: yest && yest.revenue > 0 ? ((item.revenue - yest.revenue) / yest.revenue) * 100 : 0,
+        revenueChange:
+          yest && yest.revenue > 0
+            ? ((item.revenue - yest.revenue) / yest.revenue) * 100
+            : 0,
         yesterdayMargin: yest?.margin || 0,
         marginChange: yest ? (item.margin || 0) - yest.margin : 0,
       };
@@ -133,7 +151,7 @@ export class TrueHppService {
       where: {
         tenantId,
         entryDate: { gte: startDate, lte: endDate },
-        status: 'POSTED',
+        status: "POSTED",
       },
       include: {
         lines: {
@@ -152,12 +170,12 @@ export class TrueHppService {
         const debit = new Decimal(line.debit.toString());
         const credit = new Decimal(line.credit.toString());
 
-        if (type === 'REVENUE') {
+        if (type === "REVENUE") {
           // Normal credit: revenue is credit - debit
           totalRevenue = totalRevenue.plus(credit).minus(debit);
-        } else if (line.account.code === 'HPP') {
+        } else if (line.account.code === "HPP") {
           totalHpp = totalHpp.plus(debit).minus(credit);
-        } else if (type === 'EXPENSE') {
+        } else if (type === "EXPENSE") {
           totalExpense = totalExpense.plus(debit).minus(credit);
         }
       }
@@ -173,8 +191,12 @@ export class TrueHppService {
       grossProfit: grossProfit.toNumber(),
       totalExpense: totalExpense.toNumber(),
       netProfit: netProfit.toNumber(),
-      grossMarginPct: totalRevenue.greaterThan(0) ? grossProfit.dividedBy(totalRevenue).times(100).toNumber() : 0,
-      netMarginPct: totalRevenue.greaterThan(0) ? netProfit.dividedBy(totalRevenue).times(100).toNumber() : 0,
+      grossMarginPct: totalRevenue.greaterThan(0)
+        ? grossProfit.dividedBy(totalRevenue).times(100).toNumber()
+        : 0,
+      netMarginPct: totalRevenue.greaterThan(0)
+        ? netProfit.dividedBy(totalRevenue).times(100).toNumber()
+        : 0,
     };
   }
 }

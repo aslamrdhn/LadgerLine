@@ -1,12 +1,21 @@
-import { PrismaTransaction, prisma } from '../../lib/prisma.ts';
-import { Decimal } from 'decimal.js';
-import { ICostEngine, IAllocateCostResult, IPurchaseCostResult, IAllocationItem } from './ICostEngine.ts';
-import { LedgerError } from '../../utils/errorCodes.ts';
+import { PrismaTransaction, prisma } from "../../lib/prisma.ts";
+import { Decimal } from "decimal.js";
+import {
+  ICostEngine,
+  IAllocateCostResult,
+  IPurchaseCostResult,
+  IAllocationItem,
+} from "./ICostEngine.ts";
+import { LedgerError } from "../../utils/errorCodes.ts";
 
 const PRECISION = new Decimal(1e-6);
 
 export class FifoCostEngine implements ICostEngine {
-  async getCurrentUnitCost(itemId: string, tenantId: string, warehouseId: string): Promise<Decimal> {
+  async getCurrentUnitCost(
+    itemId: string,
+    tenantId: string,
+    warehouseId: string,
+  ): Promise<Decimal> {
     const layer = await prisma.fifoLayer.findFirst({
       where: {
         tenantId: tenantId,
@@ -15,7 +24,7 @@ export class FifoCostEngine implements ICostEngine {
         remainingQty: { gt: 0 },
         isExhausted: false,
       },
-      orderBy: { isVirtual: 'asc', layerDate: 'asc' },
+      orderBy: { isVirtual: "asc", layerDate: "asc" },
     });
 
     if (!layer) return new Decimal(0);
@@ -27,14 +36,14 @@ export class FifoCostEngine implements ICostEngine {
     salesId: string,
     tenantId: string,
     outletId: string,
-    tx?: PrismaTransaction
+    tx?: PrismaTransaction,
   ): Promise<IAllocateCostResult> {
     const transaction = tx || prisma;
     const result: IAllocateCostResult = { totalHpp: new Decimal(0), items: [] };
 
-    const itemIds = allocations.map(a => a.itemId);
+    const itemIds = allocations.map((a) => a.itemId);
     const uniqueItemIds = [...new Set(itemIds)];
-    const warehouses = allocations.map(a => a.warehouseId);
+    const warehouses = allocations.map((a) => a.warehouseId);
     const uniqueWarehouses = [...new Set(warehouses)];
 
     const layers = await transaction.fifoLayer.findMany({
@@ -45,7 +54,7 @@ export class FifoCostEngine implements ICostEngine {
         remainingQty: { gt: 0 },
         isExhausted: false,
       },
-      orderBy: { isVirtual: 'asc', layerDate: 'asc' },
+      orderBy: { isVirtual: "asc", layerDate: "asc" },
     });
 
     const layerMap = new Map<string, typeof layers>();
@@ -55,7 +64,10 @@ export class FifoCostEngine implements ICostEngine {
       layerMap.get(key)!.push(layer);
     }
 
-    const detailMap = new Map<string, { itemId: string; quantity: Decimal; warehouseId: string }[]>();
+    const detailMap = new Map<
+      string,
+      { itemId: string; quantity: Decimal; warehouseId: string }[]
+    >();
     for (const alloc of allocations) {
       if (!detailMap.has(alloc.salesDetailId)) {
         detailMap.set(alloc.salesDetailId, []);
@@ -69,7 +81,12 @@ export class FifoCostEngine implements ICostEngine {
 
     for (const [salesDetailId, allocs] of detailMap) {
       let totalCost = new Decimal(0);
-      const detailItems: { itemId: string; quantity: Decimal; unitCost: Decimal; totalCost: Decimal }[] = [];
+      const detailItems: {
+        itemId: string;
+        quantity: Decimal;
+        unitCost: Decimal;
+        totalCost: Decimal;
+      }[] = [];
 
       for (const alloc of allocs) {
         let remainingToConsume = alloc.quantity;
@@ -78,11 +95,24 @@ export class FifoCostEngine implements ICostEngine {
         while (remainingToConsume.greaterThan(0)) {
           const key = `${alloc.itemId}|${alloc.warehouseId}`;
           let availableLayers = layerMap.get(key) || [];
-          let layer = availableLayers.find(l => new Decimal(l.remainingQty.toString()).greaterThan(0));
+          let layer = availableLayers.find((l) =>
+            new Decimal(l.remainingQty.toString()).greaterThan(0),
+          );
 
           if (!layer) {
-            const lastCost = await this.getLastKnownUnitCost(transaction, tenantId, alloc.itemId);
-            await this.createVirtualLayer(transaction, tenantId, alloc.itemId, alloc.warehouseId, remainingToConsume, lastCost);
+            const lastCost = await this.getLastKnownUnitCost(
+              transaction,
+              tenantId,
+              alloc.itemId,
+            );
+            await this.createVirtualLayer(
+              transaction,
+              tenantId,
+              alloc.itemId,
+              alloc.warehouseId,
+              remainingToConsume,
+              lastCost,
+            );
 
             const newLayer = await transaction.fifoLayer.findFirst({
               where: {
@@ -92,10 +122,14 @@ export class FifoCostEngine implements ICostEngine {
                 remainingQty: { gt: 0 },
                 isExhausted: false,
               },
-              orderBy: { isVirtual: 'asc', layerDate: 'asc' },
+              orderBy: { isVirtual: "asc", layerDate: "asc" },
             });
 
-            if (!newLayer) throw new LedgerError('INV_003', `FIFO layer not found for item ${alloc.itemId}`);
+            if (!newLayer)
+              throw new LedgerError(
+                "INV_003",
+                `FIFO layer not found for item ${alloc.itemId}`,
+              );
             layer = newLayer;
             if (!layerMap.has(key)) layerMap.set(key, []);
             layerMap.get(key)!.push(layer);
@@ -118,7 +152,10 @@ export class FifoCostEngine implements ICostEngine {
           });
 
           if (updated.count === 0) {
-            throw new LedgerError('LOCK_001', `FIFO layer ${layer.id} conflict`);
+            throw new LedgerError(
+              "LOCK_001",
+              `FIFO layer ${layer.id} conflict`,
+            );
           }
 
           // ============================================================
@@ -145,7 +182,9 @@ export class FifoCostEngine implements ICostEngine {
           });
         }
 
-        const unitCost = alloc.quantity.greaterThan(0) ? allocatedCost.dividedBy(alloc.quantity) : new Decimal(0);
+        const unitCost = alloc.quantity.greaterThan(0)
+          ? allocatedCost.dividedBy(alloc.quantity)
+          : new Decimal(0);
         totalCost = totalCost.plus(allocatedCost);
         detailItems.push({
           itemId: alloc.itemId,
@@ -159,7 +198,7 @@ export class FifoCostEngine implements ICostEngine {
         where: { id: salesDetailId },
         data: {
           hpp: totalCost.toNumber(),
-          hppStatus: 'ALLOCATED',
+          hppStatus: "ALLOCATED",
         },
       });
 
@@ -187,7 +226,7 @@ export class FifoCostEngine implements ICostEngine {
       purchaseOrderId: string;
     },
     tenantId: string,
-    tx?: PrismaTransaction
+    tx?: PrismaTransaction,
   ): Promise<IPurchaseCostResult> {
     const transaction = tx || prisma;
 
@@ -223,14 +262,19 @@ export class FifoCostEngine implements ICostEngine {
       const updated = await transaction.inventoryBalance.updateMany({
         where: { id: balance.id, version: oldVersion },
         data: {
-          currentStock: new Decimal(balance.currentStock.toString()).plus(purchase.quantity).toNumber(),
+          currentStock: new Decimal(balance.currentStock.toString())
+            .plus(purchase.quantity)
+            .toNumber(),
           version: { increment: 1 },
           lastUpdated: new Date(),
         },
       });
 
       if (updated.count === 0) {
-        throw new LedgerError('LOCK_001', 'Optimistic locking conflict on purchase');
+        throw new LedgerError(
+          "LOCK_001",
+          "Optimistic locking conflict on purchase",
+        );
       }
     } else {
       await transaction.inventoryBalance.create({
@@ -249,7 +293,11 @@ export class FifoCostEngine implements ICostEngine {
     return { newAverageCost: new Decimal(0), fifoLayersUpdated: 1 };
   }
 
-  async rollbackSalesAllocation(salesId: string, tenantId: string, tx?: PrismaTransaction): Promise<void> {
+  async rollbackSalesAllocation(
+    salesId: string,
+    tenantId: string,
+    tx?: PrismaTransaction,
+  ): Promise<void> {
     const transaction = tx || prisma;
     const consumptions = await transaction.fifoConsumption.findMany({
       where: { salesId: salesId },
@@ -261,7 +309,9 @@ export class FifoCostEngine implements ICostEngine {
       if (!layer) continue;
 
       const oldVersion = layer.version;
-      const newRemaining = new Decimal(layer.remainingQty.toString()).plus(consumption.quantityConsumed.toString());
+      const newRemaining = new Decimal(layer.remainingQty.toString()).plus(
+        consumption.quantityConsumed.toString(),
+      );
 
       const updated = await transaction.fifoLayer.updateMany({
         where: { id: layer.id, version: oldVersion },
@@ -274,7 +324,10 @@ export class FifoCostEngine implements ICostEngine {
       });
 
       if (updated.count === 0) {
-        throw new LedgerError('LOCK_001', `FIFO layer ${layer.id} conflict on rollback`);
+        throw new LedgerError(
+          "LOCK_001",
+          `FIFO layer ${layer.id} conflict on rollback`,
+        );
       }
 
       // Update memory state for rollback
@@ -297,18 +350,27 @@ export class FifoCostEngine implements ICostEngine {
         const balUpdated = await transaction.inventoryBalance.updateMany({
           where: { id: balance.id, version: oldBalVersion },
           data: {
-            currentStock: new Decimal(balance.currentStock.toString()).plus(consumption.quantityConsumed.toString()).toNumber(),
+            currentStock: new Decimal(balance.currentStock.toString())
+              .plus(consumption.quantityConsumed.toString())
+              .toNumber(),
             version: { increment: 1 },
             lastUpdated: new Date(),
           },
         });
 
         if (balUpdated.count === 0) {
-          throw new LedgerError('LOCK_001', 'Optimistic locking conflict on rollback balance');
+          throw new LedgerError(
+            "LOCK_001",
+            "Optimistic locking conflict on rollback balance",
+          );
         }
 
         balance.version = balance.version + 1;
-        (balance as any).currentStock = new Decimal(balance.currentStock.toString()).plus(consumption.quantityConsumed.toString()).toNumber();
+        (balance as any).currentStock = new Decimal(
+          balance.currentStock.toString(),
+        )
+          .plus(consumption.quantityConsumed.toString())
+          .toNumber();
       }
     }
   }
@@ -322,7 +384,7 @@ export class FifoCostEngine implements ICostEngine {
       unitCost?: Decimal;
     },
     tenantId: string,
-    tx?: PrismaTransaction
+    tx?: PrismaTransaction,
   ): Promise<void> {
     const transaction = tx || prisma;
 
@@ -336,7 +398,7 @@ export class FifoCostEngine implements ICostEngine {
       },
     });
 
-    if (!balance) throw new LedgerError('INV_002', 'Item not found');
+    if (!balance) throw new LedgerError("INV_002", "Item not found");
 
     // ============================================================
     // FIX: Zero Cost Fix (ADR-078)
@@ -346,13 +408,23 @@ export class FifoCostEngine implements ICostEngine {
       unitCost = adjustment.unitCost;
     } else if (adjustment.quantity.greaterThan(0)) {
       // Surplus: search last known cost or average cost
-      const lastCost = await this.getLastKnownUnitCost(transaction, tenantId, adjustment.itemId);
+      const lastCost = await this.getLastKnownUnitCost(
+        transaction,
+        tenantId,
+        adjustment.itemId,
+      );
       if (lastCost && lastCost.greaterThan(0)) {
         unitCost = lastCost;
-      } else if (balance.averageCost && new Decimal(balance.averageCost.toString()).greaterThan(0)) {
+      } else if (
+        balance.averageCost &&
+        new Decimal(balance.averageCost.toString()).greaterThan(0)
+      ) {
         unitCost = new Decimal(balance.averageCost.toString());
       } else {
-        throw new LedgerError('OPN_002', 'Surplus requires estimated unit cost or existing cost reference');
+        throw new LedgerError(
+          "OPN_002",
+          "Surplus requires estimated unit cost or existing cost reference",
+        );
       }
     } else {
       // Deficit
@@ -363,18 +435,25 @@ export class FifoCostEngine implements ICostEngine {
     const updated = await transaction.inventoryBalance.updateMany({
       where: { id: balance.id, version: oldVersion },
       data: {
-        currentStock: new Decimal(balance.currentStock.toString()).plus(adjustment.quantity).toNumber(),
+        currentStock: new Decimal(balance.currentStock.toString())
+          .plus(adjustment.quantity)
+          .toNumber(),
         version: { increment: 1 },
         lastUpdated: new Date(),
       },
     });
 
     if (updated.count === 0) {
-      throw new LedgerError('LOCK_001', 'Optimistic locking conflict on adjustStock');
+      throw new LedgerError(
+        "LOCK_001",
+        "Optimistic locking conflict on adjustStock",
+      );
     }
 
     balance.version = balance.version + 1;
-    (balance as any).currentStock = new Decimal(balance.currentStock.toString()).plus(adjustment.quantity).toNumber();
+    (balance as any).currentStock = new Decimal(balance.currentStock.toString())
+      .plus(adjustment.quantity)
+      .toNumber();
 
     await transaction.fifoLayer.create({
       data: {
@@ -397,34 +476,51 @@ export class FifoCostEngine implements ICostEngine {
     await transaction.inventoryLedger.create({
       data: {
         tenantId: tenantId,
-        outletId: '',
+        outletId: "",
         warehouseId: adjustment.warehouseId,
         itemId: adjustment.itemId,
-        movementType: adjustment.reason.startsWith('REFUND') ? 'REFUND' : 'STOCK_ADJUSTMENT',
-        referenceType: 'ADJUSTMENT',
+        movementType: adjustment.reason.startsWith("REFUND")
+          ? "REFUND"
+          : "STOCK_ADJUSTMENT",
+        referenceType: "ADJUSTMENT",
         referenceId: adjustment.reason,
         businessDate: new Date(),
-        qtyIn: adjustment.quantity.greaterThan(0) ? adjustment.quantity.toNumber() : 0,
-        qtyOut: adjustment.quantity.lessThan(0) ? Math.abs(adjustment.quantity.toNumber()) : 0,
-        balanceAfter: new Decimal(balance.currentStock.toString()).plus(adjustment.quantity).toNumber(),
+        qtyIn: adjustment.quantity.greaterThan(0)
+          ? adjustment.quantity.toNumber()
+          : 0,
+        qtyOut: adjustment.quantity.lessThan(0)
+          ? Math.abs(adjustment.quantity.toNumber())
+          : 0,
+        balanceAfter: new Decimal(balance.currentStock.toString())
+          .plus(adjustment.quantity)
+          .toNumber(),
         unitCost: unitCost.toNumber(),
-        costMethod: 'FIFO',
-        unitSnapshot: 'pcs',
+        costMethod: "FIFO",
+        unitSnapshot: "pcs",
       },
     });
   }
 
-  private async getLastKnownUnitCost(tx: PrismaTransaction, tenantId: string, itemId: string): Promise<Decimal> {
+  private async getLastKnownUnitCost(
+    tx: PrismaTransaction,
+    tenantId: string,
+    itemId: string,
+  ): Promise<Decimal> {
     const lastLayer = await tx.fifoLayer.findFirst({
-      where: { tenantId: tenantId, itemId: itemId, isVirtual: false, unitCost: { gt: 0 } },
-      orderBy: { layerDate: 'desc' },
+      where: {
+        tenantId: tenantId,
+        itemId: itemId,
+        isVirtual: false,
+        unitCost: { gt: 0 },
+      },
+      orderBy: { layerDate: "desc" },
     });
 
     if (lastLayer) return new Decimal(lastLayer.unitCost.toString());
 
     const lastReceiving = await tx.receivingDetail.findFirst({
       where: { itemId: itemId, receiving: { tenantId: tenantId } },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
 
     if (lastReceiving) return new Decimal(lastReceiving.unitCost.toString());
@@ -438,7 +534,7 @@ export class FifoCostEngine implements ICostEngine {
     itemId: string,
     warehouseId: string,
     quantity: Decimal,
-    unitCost: Decimal
+    unitCost: Decimal,
   ): Promise<void> {
     await tx.fifoLayer.create({
       data: {

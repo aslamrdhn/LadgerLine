@@ -1,6 +1,6 @@
-import { prisma, withTenant, PrismaTransaction } from '../lib/prisma.ts';
-import { redis } from '../lib/redis.ts';
-import { FifoCostEngine } from '../domain/cost-engine/FifoCostEngine.ts';
+import { prisma, withTenant, PrismaTransaction } from "../lib/prisma.ts";
+import { redis } from "../lib/redis.ts";
+import { FifoCostEngine } from "../domain/cost-engine/FifoCostEngine.ts";
 
 const SWEEP_INTERVAL = 60 * 1000;
 const BATCH_SIZE = 500;
@@ -12,20 +12,22 @@ function sleep(ms: number) {
 }
 
 export async function startOutboxWorker() {
-  console.log('📡 Outbox Worker started (sweep: 60s, batch: 500, bounded loops: 10, yield: 100ms, atomic UPDATE)');
+  console.log(
+    "📡 Outbox Worker started (sweep: 60s, batch: 500, bounded loops: 10, yield: 100ms, atomic UPDATE)",
+  );
 
   let isSweeping = false;
 
   setInterval(async () => {
     if (isSweeping) {
-      console.warn('⚠️ Sweep already running, skipping this interval.');
+      console.warn("⚠️ Sweep already running, skipping this interval.");
       return;
     }
     isSweeping = true;
     try {
       await sweepOutbox();
     } catch (error: any) {
-      console.error('❌ Sweep error:', error.message);
+      console.error("❌ Sweep error:", error.message);
     } finally {
       isSweeping = false;
     }
@@ -50,20 +52,21 @@ async function sweepOutbox() {
       break;
     }
 
-    const ids = rawIds.map(r => r.id);
+    const ids = rawIds.map((r) => r.id);
 
     await prisma.outbox.updateMany({
       where: { id: { in: ids } },
-      data: { status: 'PROCESSING', processedAt: new Date() }
+      data: { status: "PROCESSING", processedAt: new Date() },
     });
 
     const claimedEvents = await prisma.outbox.findMany({
       where: { id: { in: ids } },
-      orderBy: { createdAt: 'asc' }
+      orderBy: { createdAt: "asc" },
     });
 
     for (const ev of claimedEvents) {
-      const payload = typeof ev.payload === 'string' ? JSON.parse(ev.payload) : ev.payload;
+      const payload =
+        typeof ev.payload === "string" ? JSON.parse(ev.payload) : ev.payload;
       await withTenant(ev.tenantId, async (tx: PrismaTransaction) => {
         await processEvent(tx, ev.id, ev.eventType, payload);
       });
@@ -88,26 +91,33 @@ async function sweepOutbox() {
   }
 
   if (processedCount > 0) {
-    console.log(`✅ Sweep processed ${processedCount} events (loops: ${loopCount})`);
+    console.log(
+      `✅ Sweep processed ${processedCount} events (loops: ${loopCount})`,
+    );
   }
 }
 
-async function processEvent(tx: PrismaTransaction, eventId: string, eventType: string, payload: any) {
+async function processEvent(
+  tx: PrismaTransaction,
+  eventId: string,
+  eventType: string,
+  payload: any,
+) {
   try {
     switch (eventType) {
-      case 'SaleCreated':
+      case "SaleCreated":
         await handleSaleCreated(tx, payload);
         break;
-      case 'SaleVoided':
+      case "SaleVoided":
         await handleSaleVoided(tx, payload);
         break;
-      case 'PeriodClosed':
+      case "PeriodClosed":
         await handlePeriodClosed(tx, payload);
         break;
-      case 'StockConflictAlert':
+      case "StockConflictAlert":
         await handleStockConflictAlert(tx, payload);
         break;
-      case 'FifoAllocationJob':
+      case "FifoAllocationJob":
         await handleFifoAllocationJob(tx, payload);
         break;
       default:
@@ -117,7 +127,7 @@ async function processEvent(tx: PrismaTransaction, eventId: string, eventType: s
     await tx.outbox.update({
       where: { id: eventId },
       data: {
-        status: 'PROCESSED',
+        status: "PROCESSED",
         processedAt: new Date(),
       },
     });
@@ -128,14 +138,14 @@ async function processEvent(tx: PrismaTransaction, eventId: string, eventType: s
     const record = await prisma.outbox.findUnique({ where: { id: eventId } });
     if (record) {
       const retryCount = record.retryCount + 1;
-      const newStatus = retryCount >= record.maxRetry ? 'FAILED' : 'PENDING';
+      const newStatus = retryCount >= record.maxRetry ? "FAILED" : "PENDING";
       await prisma.outbox.update({
         where: { id: eventId },
         data: {
           status: newStatus,
           retryCount: retryCount,
           errorMessage: error instanceof Error ? error.message : String(error),
-          ...(newStatus === 'FAILED' ? { processedAt: new Date() } : {}),
+          ...(newStatus === "FAILED" ? { processedAt: new Date() } : {}),
         },
       });
     }
@@ -161,7 +171,9 @@ async function handleSaleCreated(tx: PrismaTransaction, payload: any) {
     }
   }
 
-  console.log(`📊 Sale created: ${payload.invoice || payload.invoiceNumber || sale?.invoiceNumber}`);
+  console.log(
+    `📊 Sale created: ${payload.invoice || payload.invoiceNumber || sale?.invoiceNumber}`,
+  );
 }
 
 async function handleSaleVoided(tx: PrismaTransaction, payload: any) {
@@ -169,8 +181,8 @@ async function handleSaleVoided(tx: PrismaTransaction, payload: any) {
   const managers = await tx.userProfile.findMany({
     where: {
       tenantId: payload.tenantId,
-      role: { in: ['owner', 'super_admin'] },
-      status: 'active',
+      role: { in: ["owner", "super_admin"] },
+      status: "active",
     },
     select: { userId: true },
   });
@@ -180,9 +192,9 @@ async function handleSaleVoided(tx: PrismaTransaction, payload: any) {
       data: {
         tenantId: payload.tenantId,
         userId: manager.userId,
-        type: 'SALE_VOIDED',
+        type: "SALE_VOIDED",
         message: `Transaksi ${payload.invoiceNumber} telah di-void`,
-        severity: 'warning',
+        severity: "warning",
       },
     });
   }
@@ -194,8 +206,8 @@ async function handlePeriodClosed(tx: PrismaTransaction, payload: any) {
     data: {
       tenantId: payload.tenantId,
       periodId: payload.periodId,
-      reportType: 'DAILY_CLOSING',
-      status: 'PENDING',
+      reportType: "DAILY_CLOSING",
+      status: "PENDING",
     },
   });
 }
@@ -204,8 +216,8 @@ async function handleStockConflictAlert(tx: PrismaTransaction, payload: any) {
   const managers = await tx.userProfile.findMany({
     where: {
       tenantId: payload.tenantId,
-      role: { in: ['owner', 'super_admin'] },
-      status: 'active',
+      role: { in: ["owner", "super_admin"] },
+      status: "active",
     },
     select: { userId: true },
   });
@@ -215,9 +227,9 @@ async function handleStockConflictAlert(tx: PrismaTransaction, payload: any) {
       data: {
         tenantId: payload.tenantId,
         userId: manager.userId,
-        type: 'STOCK_CONFLICT',
+        type: "STOCK_CONFLICT",
         message: `Stock conflict detected for offline transaction. Please review.`,
-        severity: 'warning',
+        severity: "warning",
       },
     });
   }
@@ -236,22 +248,22 @@ async function handleFifoAllocationJob(tx: PrismaTransaction, payload: any) {
     },
   });
 
-  if (!job || job.status !== 'PENDING') return;
+  if (!job || job.status !== "PENDING") return;
 
   await tx.fifoAllocationJob.update({
     where: { id: job.id },
-    data: { status: 'PROCESSING' },
+    data: { status: "PROCESSING" },
   });
 
   try {
     const engine = new FifoCostEngine();
-    const allocations = JSON.parse(job.allocations || '[]') as any[];
+    const allocations = JSON.parse(job.allocations || "[]") as any[];
     const hppResult = await engine.allocateSalesCost(
       allocations,
       job.salesId,
       job.tenantId,
       job.sales.outletId,
-      tx
+      tx,
     );
 
     await tx.salesHeader.update({
@@ -259,7 +271,9 @@ async function handleFifoAllocationJob(tx: PrismaTransaction, payload: any) {
       data: { totalHpp: hppResult.totalHpp.toNumber(), isHppCalculated: true },
     });
 
-    const sale = await tx.salesHeader.findUnique({ where: { id: job.salesId } });
+    const sale = await tx.salesHeader.findUnique({
+      where: { id: job.salesId },
+    });
     if (sale && sale.hppJournalLineId && sale.inventoryJournalLineId) {
       await tx.journalLine.update({
         where: { id: sale.hppJournalLineId },
@@ -273,13 +287,13 @@ async function handleFifoAllocationJob(tx: PrismaTransaction, payload: any) {
 
     await tx.fifoAllocationJob.update({
       where: { id: job.id },
-      data: { status: 'SUCCESS', completedAt: new Date() },
+      data: { status: "SUCCESS", completedAt: new Date() },
     });
 
     await tx.outbox.create({
       data: {
         tenantId: job.tenantId,
-        eventType: 'HPPAllocated',
+        eventType: "HPPAllocated",
         payload: JSON.stringify({
           salesId: job.salesId,
           totalHpp: hppResult.totalHpp.toNumber(),
@@ -287,11 +301,16 @@ async function handleFifoAllocationJob(tx: PrismaTransaction, payload: any) {
       },
     });
 
-    console.log(`💰 HPP allocated for sale ${sale?.invoiceNumber}: ${hppResult.totalHpp.toNumber()}`);
+    console.log(
+      `💰 HPP allocated for sale ${sale?.invoiceNumber}: ${hppResult.totalHpp.toNumber()}`,
+    );
   } catch (error: any) {
-    console.error(`❌ FIFO allocation failed for job ${job.id}:`, error.message);
+    console.error(
+      `❌ FIFO allocation failed for job ${job.id}:`,
+      error.message,
+    );
     const retryCount = job.retryCount + 1;
-    const newStatus = retryCount >= job.maxRetry ? 'FAILED' : 'PENDING';
+    const newStatus = retryCount >= job.maxRetry ? "FAILED" : "PENDING";
     await tx.fifoAllocationJob.update({
       where: { id: job.id },
       data: {

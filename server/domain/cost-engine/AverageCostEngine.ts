@@ -1,10 +1,19 @@
-import { PrismaTransaction, prisma } from '../../lib/prisma.ts';
-import { Decimal } from 'decimal.js';
-import { ICostEngine, IAllocateCostResult, IPurchaseCostResult, IAllocationItem } from './ICostEngine.ts';
-import { LedgerError } from '../../utils/errorCodes.ts';
+import { PrismaTransaction, prisma } from "../../lib/prisma.ts";
+import { Decimal } from "decimal.js";
+import {
+  ICostEngine,
+  IAllocateCostResult,
+  IPurchaseCostResult,
+  IAllocationItem,
+} from "./ICostEngine.ts";
+import { LedgerError } from "../../utils/errorCodes.ts";
 
 export class AverageCostEngine implements ICostEngine {
-  async getCurrentUnitCost(itemId: string, tenantId: string, warehouseId: string): Promise<Decimal> {
+  async getCurrentUnitCost(
+    itemId: string,
+    tenantId: string,
+    warehouseId: string,
+  ): Promise<Decimal> {
     const balance = await prisma.inventoryBalance.findUnique({
       where: {
         tenantId_itemId_warehouseId: {
@@ -22,18 +31,18 @@ export class AverageCostEngine implements ICostEngine {
     salesId: string,
     tenantId: string,
     outletId: string,
-    tx?: PrismaTransaction
+    tx?: PrismaTransaction,
   ): Promise<IAllocateCostResult> {
     const transaction = tx || prisma;
     const result: IAllocateCostResult = { totalHpp: new Decimal(0), items: [] };
 
-    const itemIds = allocations.map(a => a.itemId);
+    const itemIds = allocations.map((a) => a.itemId);
     const uniqueItemIds = [...new Set(itemIds)];
     const balances = await transaction.inventoryBalance.findMany({
       where: {
         tenantId: tenantId,
         itemId: { in: uniqueItemIds },
-        warehouseId: { in: allocations.map(a => a.warehouseId) },
+        warehouseId: { in: allocations.map((a) => a.warehouseId) },
       },
     });
 
@@ -43,7 +52,10 @@ export class AverageCostEngine implements ICostEngine {
       balanceMap.set(key, new Decimal(b.averageCost?.toString() || 0));
     }
 
-    const detailMap = new Map<string, { itemId: string; quantity: Decimal; warehouseId: string }[]>();
+    const detailMap = new Map<
+      string,
+      { itemId: string; quantity: Decimal; warehouseId: string }[]
+    >();
     for (const alloc of allocations) {
       if (!detailMap.has(alloc.salesDetailId)) {
         detailMap.set(alloc.salesDetailId, []);
@@ -57,7 +69,12 @@ export class AverageCostEngine implements ICostEngine {
 
     for (const [salesDetailId, allocs] of detailMap) {
       let totalCost = new Decimal(0);
-      const detailItems: { itemId: string; quantity: Decimal; unitCost: Decimal; totalCost: Decimal }[] = [];
+      const detailItems: {
+        itemId: string;
+        quantity: Decimal;
+        unitCost: Decimal;
+        totalCost: Decimal;
+      }[] = [];
 
       for (const alloc of allocs) {
         const key = `${alloc.itemId}|${alloc.warehouseId}`;
@@ -77,7 +94,7 @@ export class AverageCostEngine implements ICostEngine {
         where: { id: salesDetailId },
         data: {
           hpp: totalCost.toNumber(),
-          hppStatus: 'ALLOCATED',
+          hppStatus: "ALLOCATED",
         },
       });
 
@@ -105,7 +122,7 @@ export class AverageCostEngine implements ICostEngine {
       purchaseOrderId: string;
     },
     tenantId: string,
-    tx?: PrismaTransaction
+    tx?: PrismaTransaction,
   ): Promise<IPurchaseCostResult> {
     const transaction = tx || prisma;
 
@@ -138,7 +155,10 @@ export class AverageCostEngine implements ICostEngine {
     const currentAvg = new Decimal(balance.averageCost?.toString() || 0);
     const newStock = currentStock.plus(purchase.quantity);
     const newAvg = newStock.greaterThan(0)
-      ? currentStock.times(currentAvg).plus(purchase.quantity.times(purchase.unitCost)).dividedBy(newStock)
+      ? currentStock
+          .times(currentAvg)
+          .plus(purchase.quantity.times(purchase.unitCost))
+          .dividedBy(newStock)
       : purchase.unitCost;
 
     const oldVersion = balance.version;
@@ -153,13 +173,20 @@ export class AverageCostEngine implements ICostEngine {
     });
 
     if (updated.count === 0) {
-      throw new LedgerError('LOCK_001', 'Optimistic locking conflict on Average Cost update');
+      throw new LedgerError(
+        "LOCK_001",
+        "Optimistic locking conflict on Average Cost update",
+      );
     }
 
     return { newAverageCost: newAvg, fifoLayersUpdated: 0 };
   }
 
-  async rollbackSalesAllocation(salesId: string, tenantId: string, tx?: PrismaTransaction): Promise<void> {
+  async rollbackSalesAllocation(
+    salesId: string,
+    tenantId: string,
+    tx?: PrismaTransaction,
+  ): Promise<void> {
     const transaction = tx || prisma;
     const details = await transaction.salesDetail.findMany({
       where: { salesId },
@@ -178,11 +205,14 @@ export class AverageCostEngine implements ICostEngine {
       // FIX: Gunakan warehouseId dari transaksi asli (ADR-079)
       // ============================================================
       const warehouseId = (detail.sales as any).warehouseId;
-      const finalWarehouseId = warehouseId ?? detail.sales.outlet.defaultWarehouseId;
+      const finalWarehouseId =
+        warehouseId ?? detail.sales.outlet.defaultWarehouseId;
       if (!finalWarehouseId) continue;
 
       for (const item of snapshot.finalItems) {
-        const quantity = new Decimal(item.quantity).times(detail.quantity.toString());
+        const quantity = new Decimal(item.quantity).times(
+          detail.quantity.toString(),
+        );
         const balance = await transaction.inventoryBalance.findUnique({
           where: {
             tenantId_itemId_warehouseId: {
@@ -198,14 +228,19 @@ export class AverageCostEngine implements ICostEngine {
           const updated = await transaction.inventoryBalance.updateMany({
             where: { id: balance.id, version: oldVersion },
             data: {
-              currentStock: new Decimal(balance.currentStock.toString()).plus(quantity).toNumber(),
+              currentStock: new Decimal(balance.currentStock.toString())
+                .plus(quantity)
+                .toNumber(),
               version: { increment: 1 },
               lastUpdated: new Date(),
             },
           });
 
           if (updated.count === 0) {
-            throw new LedgerError('LOCK_001', 'Optimistic locking conflict on rollback');
+            throw new LedgerError(
+              "LOCK_001",
+              "Optimistic locking conflict on rollback",
+            );
           }
         }
       }
@@ -221,7 +256,7 @@ export class AverageCostEngine implements ICostEngine {
       unitCost?: Decimal;
     },
     tenantId: string,
-    tx?: PrismaTransaction
+    tx?: PrismaTransaction,
   ): Promise<void> {
     const transaction = tx || prisma;
 
@@ -235,16 +270,21 @@ export class AverageCostEngine implements ICostEngine {
       },
     });
 
-    if (!balance) throw new LedgerError('INV_002', 'Item not found');
+    if (!balance) throw new LedgerError("INV_002", "Item not found");
 
-    const newStock = new Decimal(balance.currentStock.toString()).plus(adjustment.quantity);
+    const newStock = new Decimal(balance.currentStock.toString()).plus(
+      adjustment.quantity,
+    );
     const currentAvg = new Decimal(balance.averageCost?.toString() || 0);
     let newAvg = currentAvg;
 
     if (adjustment.unitCost) {
-      const totalCost = new Decimal(balance.currentStock.toString()).times(currentAvg)
+      const totalCost = new Decimal(balance.currentStock.toString())
+        .times(currentAvg)
         .plus(adjustment.quantity.times(adjustment.unitCost));
-      newAvg = newStock.greaterThan(0) ? totalCost.dividedBy(newStock) : currentAvg;
+      newAvg = newStock.greaterThan(0)
+        ? totalCost.dividedBy(newStock)
+        : currentAvg;
     }
 
     const oldVersion = balance.version;
@@ -259,25 +299,34 @@ export class AverageCostEngine implements ICostEngine {
     });
 
     if (updated.count === 0) {
-      throw new LedgerError('LOCK_001', 'Optimistic locking conflict on Average Cost adjust');
+      throw new LedgerError(
+        "LOCK_001",
+        "Optimistic locking conflict on Average Cost adjust",
+      );
     }
 
     await transaction.inventoryLedger.create({
       data: {
         tenantId: tenantId,
-        outletId: '',
+        outletId: "",
         warehouseId: adjustment.warehouseId,
         itemId: adjustment.itemId,
-        movementType: adjustment.reason.startsWith('REFUND') ? 'REFUND' : 'STOCK_ADJUSTMENT',
-        referenceType: 'ADJUSTMENT',
+        movementType: adjustment.reason.startsWith("REFUND")
+          ? "REFUND"
+          : "STOCK_ADJUSTMENT",
+        referenceType: "ADJUSTMENT",
         referenceId: adjustment.reason,
         businessDate: new Date(),
-        qtyIn: adjustment.quantity.greaterThan(0) ? adjustment.quantity.toNumber() : 0,
-        qtyOut: adjustment.quantity.lessThan(0) ? Math.abs(adjustment.quantity.toNumber()) : 0,
+        qtyIn: adjustment.quantity.greaterThan(0)
+          ? adjustment.quantity.toNumber()
+          : 0,
+        qtyOut: adjustment.quantity.lessThan(0)
+          ? Math.abs(adjustment.quantity.toNumber())
+          : 0,
         balanceAfter: newStock.toNumber(),
         unitCost: adjustment.unitCost ? adjustment.unitCost.toNumber() : 0,
-        costMethod: 'AVERAGE',
-        unitSnapshot: 'pcs',
+        costMethod: "AVERAGE",
+        unitSnapshot: "pcs",
       },
     });
   }

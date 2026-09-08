@@ -18,7 +18,12 @@ export interface PaginatedResponse<T> {
 /**
  * Standard API Response format
  */
-export const apiResponse = (res: any, statusCode: number, message: string, data: any = null) => {
+export const apiResponse = (
+  res: any,
+  statusCode: number,
+  message: string,
+  data: any = null,
+) => {
   return res.status(statusCode).json({
     success: statusCode >= 200 && statusCode < 300,
     message,

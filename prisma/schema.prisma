@@ -2,12 +2,13 @@
 // GENERATOR & DATASOURCE
 // ============================================================
 generator client {
+  
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
+  url      = env("SQLITE_URL")
 }
 
 // ============================================================
@@ -29,7 +30,7 @@ datasource db {
 // TENANT & AUTH (Phase 1)
 // ============================================================
 model Tenant {
-  id                String    @id @default(cuid()) @map("id")
+  id                String    @id @default(uuid()) @map("id")
   name              String    @map("name")
   slug              String    @unique @map("slug")
   plan              String @default("cashier") @map("plan")
@@ -87,7 +88,7 @@ model Tenant {
 }
 
 model UserProfile {
-  id              String    @id @default(cuid()) @map("id")
+  id              String    @id @default(uuid()) @map("id")
   userId          String    @unique @map("user_id")
   tenantId        String?   @map("tenant_id")
   supplierId      String?   @map("supplier_id")
@@ -115,7 +116,7 @@ model UserProfile {
 }
 
 model DemoSession {
-  id           String   @id @default(cuid()) @map("id")
+  id           String   @id @default(uuid()) @map("id")
   sessionToken String   @unique @map("session_token")
   tenantId     String   @map("tenant_id")
   expiresAt    DateTime @map("expires_at")
@@ -135,7 +136,7 @@ model DemoSession {
 // MASTER DATA (Phase 1)
 // ============================================================
 model Outlet {
-  id                 String   @id @default(cuid()) @map("id")
+  id                 String   @id @default(uuid()) @map("id")
   tenantId           String   @map("tenant_id")
   name               String   @map("name")
   address            String?  @map("address")
@@ -162,7 +163,7 @@ model Outlet {
 }
 
 model Warehouse {
-  id        String   @id @default(cuid()) @map("id")
+  id        String   @id @default(uuid()) @map("id")
   tenantId  String   @map("tenant_id")
   name      String   @map("name")
   location  String?  @map("location")
@@ -178,7 +179,7 @@ model Warehouse {
 }
 
 model Unit {
-  id        String   @id @default(cuid()) @map("id")
+  id        String   @id @default(uuid()) @map("id")
   tenantId  String   @map("tenant_id")
   name      String   @map("name")
   symbol    String   @map("symbol")
@@ -194,7 +195,7 @@ model Unit {
 }
 
 model Item {
-  id        String   @id @default(cuid()) @map("id")
+  id        String   @id @default(uuid()) @map("id")
   tenantId  String   @map("tenant_id")
   sku       String   @map("sku")
   name      String   @map("name")
@@ -222,7 +223,7 @@ model Item {
 }
 
 model Menu {
-  id          String   @id @default(cuid()) @map("id")
+  id          String   @id @default(uuid()) @map("id")
   tenantId    String   @map("tenant_id")
   name        String   @map("name")
   price       Float  @map("price") 
@@ -244,7 +245,7 @@ model Menu {
 }
 
 model Recipe {
-  id             String    @id @default(cuid()) @map("id")
+  id             String    @id @default(uuid()) @map("id")
   tenantId       String    @map("tenant_id")
   menuId         String    @map("menu_id")
   version        Int       @default(1) @map("version")
@@ -264,7 +265,7 @@ model Recipe {
 }
 
 model RecipeDetail {
-  id        String   @id @default(cuid()) @map("id")
+  id        String   @id @default(uuid()) @map("id")
   tenantId  String   @map("tenant_id")
   recipeId  String   @map("recipe_id")
   itemId    String   @map("item_id")
@@ -285,7 +286,7 @@ model RecipeDetail {
 // INVENTORY & COST ENGINE (Phase 2)
 // ============================================================
 model InventoryBalance {
-  id           String   @id @default(cuid()) @map("id")
+  id           String   @id @default(uuid()) @map("id")
   tenantId     String   @map("tenant_id")
   itemId       String   @map("item_id")
   warehouseId  String   @map("warehouse_id")
@@ -304,7 +305,7 @@ model InventoryBalance {
 }
 
 model FifoLayer {
-  id           String   @id @default(cuid()) @map("id")
+  id           String   @id @default(uuid()) @map("id")
   tenantId     String   @map("tenant_id")
   itemId       String   @map("item_id")
   warehouseId  String   @map("warehouse_id")
@@ -332,7 +333,7 @@ model FifoLayer {
 }
 
 model FifoConsumption {
-  id               String   @id @default(cuid()) @map("id")
+  id               String   @id @default(uuid()) @map("id")
   tenantId         String   @map("tenant_id")
   layerId          String   @map("layer_id")
   itemId           String   @map("item_id")
@@ -350,7 +351,7 @@ model FifoConsumption {
 }
 
 model FifoAllocationJob {
-  id           String    @id @default(cuid()) @map("id")
+  id           String    @id @default(uuid()) @map("id")
   tenantId     String    @map("tenant_id")
   salesId      String    @map("sales_id")
   allocations  String      @map("allocations")
@@ -369,7 +370,7 @@ model FifoAllocationJob {
 }
 
 model InventoryLedger {
-  id            String   @id @default(cuid()) @map("id")
+  id            String   @id @default(uuid()) @map("id")
   tenantId      String   @map("tenant_id")
   outletId      String   @map("outlet_id")
   warehouseId   String   @map("warehouse_id")
@@ -396,7 +397,7 @@ model InventoryLedger {
 // POS & SALES (Phase 2)
 // ============================================================
 model SalesHeader {
-  id                     String      @id @default(cuid()) @map("id")
+  id                     String      @id @default(uuid()) @map("id")
   tenantId               String      @map("tenant_id")
   outletId               String      @map("outlet_id")
   warehouseId            String?     @map("warehouse_id")
@@ -444,7 +445,7 @@ model SalesHeader {
 }
 
 model SalesDetail {
-  id                    String    @id @default(cuid()) @map("id")
+  id                    String    @id @default(uuid()) @map("id")
   salesId               String    @map("sales_id")
   menuId                String    @map("menu_id")
   recipeVersionId       String?   @map("recipe_version_id")
@@ -469,7 +470,7 @@ model SalesDetail {
 }
 
 model Payment {
-  id        String   @id @default(cuid()) @map("id")
+  id        String   @id @default(uuid()) @map("id")
   salesId   String   @map("sales_id")
   method    String   @map("method")
   amount    Float  @map("amount") 
@@ -486,7 +487,7 @@ model Payment {
 // FINANCE & ACCOUNTING (Phase 2)
 // ============================================================
 model Account {
-  id            String   @id @default(cuid()) @map("id")
+  id            String   @id @default(uuid()) @map("id")
   tenantId      String   @map("tenant_id")
   code          String   @map("code")
   name          String   @map("name")
@@ -504,7 +505,7 @@ model Account {
 }
 
 model JournalEntry {
-  id            String   @id @default(cuid()) @map("id")
+  id            String   @id @default(uuid()) @map("id")
   tenantId      String   @map("tenant_id")
   entryNumber   String   @map("entry_number")
   entryDate     DateTime @map("entry_date")
@@ -524,7 +525,7 @@ model JournalEntry {
 }
 
 model JournalLine {
-  id             String   @id @default(cuid()) @map("id")
+  id             String   @id @default(uuid()) @map("id")
   journalEntryId String   @map("journal_entry_id")
   accountId      String   @map("account_id")
   debit          Float  @default(0) @map("debit") 
@@ -540,7 +541,7 @@ model JournalLine {
 }
 
 model Period {
-  id         String    @id @default(cuid()) @map("id")
+  id         String    @id @default(uuid()) @map("id")
   tenantId   String    @map("tenant_id")
   name       String    @map("name")
   startDate  DateTime  @map("start_date")
@@ -563,7 +564,7 @@ model Period {
 // BUSINESS MODULES (Phase 3)
 // ============================================================
 model StockOpname {
-  id                String    @id @default(cuid()) @map("id")
+  id                String    @id @default(uuid()) @map("id")
   tenantId          String    @map("tenant_id")
   outletId          String    @map("outlet_id")
   itemId            String    @map("item_id")
@@ -587,7 +588,7 @@ model StockOpname {
 }
 
 model Waste {
-  id         String    @id @default(cuid()) @map("id")
+  id         String    @id @default(uuid()) @map("id")
   tenantId   String    @map("tenant_id")
   outletId   String    @map("outlet_id")
   itemId     String    @map("item_id")
@@ -609,7 +610,7 @@ model Waste {
 }
 
 model CostAllocationConfig {
-  id                        String   @id @default(cuid()) @map("id")
+  id                        String   @id @default(uuid()) @map("id")
   tenantId                  String   @unique @map("tenant_id")
   monthlyOperationalExpense Float  @default(0) @map("monthly_operational_expense") 
   monthlyLaborExpense       Float  @default(0) @map("monthly_labor_expense") 
@@ -622,7 +623,7 @@ model CostAllocationConfig {
 }
 
 model Shift {
-  id           String    @id @default(cuid()) @map("id")
+  id           String    @id @default(uuid()) @map("id")
   tenantId     String    @map("tenant_id")
   outletId     String    @map("outlet_id")
   cashierId    String    @map("cashier_id")
@@ -644,7 +645,7 @@ model Shift {
 }
 
 model AttendanceLog {
-  id         String    @id @default(cuid()) @map("id")
+  id         String    @id @default(uuid()) @map("id")
   userId     String    @map("user_id")
   tenantId   String    @map("tenant_id")
   outletId   String    @map("outlet_id")
@@ -665,7 +666,7 @@ model AttendanceLog {
 }
 
 model PaymentMethod {
-  id         String   @id @default(cuid()) @map("id")
+  id         String   @id @default(uuid()) @map("id")
   tenantId   String   @map("tenant_id")
   outletId   String   @map("outlet_id")
   name       String   @map("name")
@@ -684,7 +685,7 @@ model PaymentMethod {
 // GOOGLE WORKSPACE (Phase 3)
 // ============================================================
 model GoogleToken {
-  id           String    @id @default(cuid()) @map("id")
+  id           String    @id @default(uuid()) @map("id")
   tenantId     String    @unique @map("tenant_id")
   accessToken  String    @map("access_token")
   refreshToken String    @map("refresh_token")
@@ -701,7 +702,7 @@ model GoogleToken {
 // ULTRA MODULES (Phase 4)
 // ============================================================
 model Supplier {
-  id           String    @id @default(cuid()) @map("id")
+  id           String    @id @default(uuid()) @map("id")
   name         String    @map("name")
   legalName    String?   @map("legal_name")
   contactEmail String    @unique @map("contact_email")
@@ -728,7 +729,7 @@ model Supplier {
 }
 
 model SupplierCatalog {
-  id            String   @id @default(cuid()) @map("id")
+  id            String   @id @default(uuid()) @map("id")
   supplierId    String   @map("supplier_id")
   name          String   @map("name")
   description   String?  @map("description")
@@ -753,7 +754,7 @@ model SupplierCatalog {
 }
 
 model PurchaseOrder {
-  id                   String    @id @default(cuid()) @map("id")
+  id                   String    @id @default(uuid()) @map("id")
   poNumber             String    @unique @map("po_number")
   tenantId             String    @map("tenant_id")
   supplierId           String    @map("supplier_id")
@@ -778,7 +779,7 @@ model PurchaseOrder {
 }
 
 model PurchaseOrderDetail {
-  id              String  @id @default(cuid()) @map("id")
+  id              String  @id @default(uuid()) @map("id")
   purchaseOrderId String  @map("purchase_order_id")
   catalogId       String  @map("catalog_id")
   quantity        Float @map("quantity") 
@@ -794,7 +795,7 @@ model PurchaseOrderDetail {
 }
 
 model Receiving {
-  id              String   @id @default(cuid()) @map("id")
+  id              String   @id @default(uuid()) @map("id")
   purchaseOrderId String   @map("purchase_order_id")
   tenantId        String   @map("tenant_id")
   outletId        String   @map("outlet_id")
@@ -812,7 +813,7 @@ model Receiving {
 }
 
 model ReceivingDetail {
-  id               String   @id @default(cuid()) @map("id")
+  id               String   @id @default(uuid()) @map("id")
   receivingId      String   @map("receiving_id")
   catalogId        String   @map("catalog_id")
   itemId           String   @map("item_id")
@@ -829,7 +830,7 @@ model ReceivingDetail {
 }
 
 model SupplierReview {
-  id                 String   @id @default(cuid()) @map("id")
+  id                 String   @id @default(uuid()) @map("id")
   supplierId         String   @map("supplier_id")
   tenantId           String   @map("tenant_id")
   purchaseOrderId    String   @unique @map("purchase_order_id")
@@ -851,7 +852,7 @@ model SupplierReview {
 }
 
 model QrMenu {
-  id        String   @id @default(cuid()) @map("id")
+  id        String   @id @default(uuid()) @map("id")
   tenantId  String   @map("tenant_id")
   outletId  String   @map("outlet_id")
   slug      String   @unique @map("slug")
@@ -867,7 +868,7 @@ model QrMenu {
 }
 
 model MigrationJob {
-  id               String    @id @default(cuid()) @map("id")
+  id               String    @id @default(uuid()) @map("id")
   tenantId         String    @map("tenant_id")
   sourceSystem     String?   @map("source_system")
   fileUrl          String?   @map("file_url")
@@ -887,7 +888,7 @@ model MigrationJob {
 // DECISION ENGINE & KDS (NEW)
 // ============================================================
 model DecisionAlert {
-  id        String   @id @default(cuid()) @map("id")
+  id        String   @id @default(uuid()) @map("id")
   tenantId  String   @map("tenant_id")
   type      String   @map("type")
   message   String   @map("message")
@@ -903,7 +904,7 @@ model DecisionAlert {
 }
 
 model KitchenOrder {
-  id          String        @id @default(cuid()) @map("id")
+  id          String        @id @default(uuid()) @map("id")
   salesId     String        @unique @map("sales_id")
   outletId    String        @map("outlet_id")
   orderNumber String        @map("order_number")
@@ -928,7 +929,7 @@ model KitchenOrder {
 // TRUE HPP MATERIALIZED VIEW
 // ============================================================
 model DailyMenuStat {
-  id            String   @id @default(cuid()) @map("id")
+  id            String   @id @default(uuid()) @map("id")
   tenantId      String   @map("tenant_id")
   menuId        String   @map("menu_id")
   date          DateTime @map("date")
@@ -952,7 +953,7 @@ model DailyMenuStat {
 // PARTIAL REFUND — dengan refundMethod
 // ============================================================
 model ReturnOrder {
-  id              String       @id @default(cuid()) @map("id")
+  id              String       @id @default(uuid()) @map("id")
   tenantId        String       @map("tenant_id")
   originalSalesId String       @map("original_sales_id")
   outletId        String       @map("outlet_id")
@@ -975,7 +976,7 @@ model ReturnOrder {
 }
 
 model ReturnDetail {
-  id               String   @id @default(cuid()) @map("id")
+  id               String   @id @default(uuid()) @map("id")
   returnOrderId    String   @map("return_order_id")
   salesDetailId    String   @map("sales_detail_id")
   itemId           String   @map("item_id")
@@ -997,7 +998,7 @@ model ReturnDetail {
 // VOID FALLBACK RETRY
 // ============================================================
 model VoidFallbackRetry {
-  id           String    @id @default(cuid()) @map("id")
+  id           String    @id @default(uuid()) @map("id")
   tenantId     String    @map("tenant_id")
   payload      String      @map("payload")
   status       String    @default("PENDING") @map("status")
@@ -1017,7 +1018,7 @@ model VoidFallbackRetry {
 // INFRASTRUCTURE & SUPPORT
 // ============================================================
 model OfflineTransaction {
-  id           String    @id @default(cuid()) @map("id")
+  id           String    @id @default(uuid()) @map("id")
   tenantId     String    @map("tenant_id")
   outletId     String    @map("outlet_id")
   cashierId    String    @map("cashier_id")
@@ -1040,7 +1041,7 @@ model OfflineTransaction {
 }
 
 model ArchiveJob {
-  id           String    @id @default(cuid()) @map("id")
+  id           String    @id @default(uuid()) @map("id")
   tenantId     String    @map("tenant_id")
   periodId     String    @map("period_id")
   reportType   String    @map("report_type")
@@ -1061,7 +1062,7 @@ model ArchiveJob {
 }
 
 model Outbox {
-  id           String    @id @default(cuid()) @map("id")
+  id           String    @id @default(uuid()) @map("id")
   tenantId     String    @map("tenant_id")
   eventType    String    @map("event_type")
   payload      String      @map("payload")
@@ -1092,7 +1093,7 @@ model IdempotencyRecord {
 }
 
 model NumberSequence {
-  id         String   @id @default(cuid()) @map("id")
+  id         String   @id @default(uuid()) @map("id")
   tenantId   String   @map("tenant_id")
   prefix     String   @map("prefix")
   year       String   @map("year")
@@ -1104,7 +1105,7 @@ model NumberSequence {
 }
 
 model NumberStatus {
-  id        String   @id @default(cuid()) @map("id")
+  id        String   @id @default(uuid()) @map("id")
   tenantId  String   @map("tenant_id")
   number    String   @map("number")
   status    String   @default("RESERVED") @map("status")
@@ -1117,7 +1118,7 @@ model NumberStatus {
 }
 
 model TaxRate {
-  id            String   @id @default(cuid()) @map("id")
+  id            String   @id @default(uuid()) @map("id")
   tenantId      String?  @map("tenant_id")
   name          String   @map("name")
   rate          Float  @map("rate") 
@@ -1134,7 +1135,7 @@ model TaxRate {
 }
 
 model AuditLog {
-  id           String   @id @default(cuid()) @map("id")
+  id           String   @id @default(uuid()) @map("id")
   tenantId     String?  @map("tenant_id")
   userId       String?  @map("user_id")
   action       String   @map("action")
@@ -1158,7 +1159,7 @@ model AuditLog {
 }
 
 model Notification {
-  id        String   @id @default(cuid()) @map("id")
+  id        String   @id @default(uuid()) @map("id")
   tenantId  String?  @map("tenant_id")
   userId    String?  @map("user_id")
   type      String   @map("type")

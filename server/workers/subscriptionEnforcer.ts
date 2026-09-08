@@ -1,4 +1,4 @@
-import { logger } from '../logger.js';
+import { logger } from "../logger.js";
 export function startSubscriptionWorker() {
-  logger.info('[WORKER] Subscription Enforcer Worker started.');
+  logger.info("[WORKER] Subscription Enforcer Worker started.");
 }

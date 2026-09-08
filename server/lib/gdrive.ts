@@ -1,21 +1,25 @@
-import { google } from 'googleapis';
+import { google } from "googleapis";
 
-export async function exportToGoogleSheets(accessToken: string, reportName: string, rows: any[][]) {
+export async function exportToGoogleSheets(
+  accessToken: string,
+  reportName: string,
+  rows: any[][],
+) {
   const auth = new google.auth.OAuth2();
   auth.setCredentials({ access_token: accessToken });
 
-  const drive = google.drive({ version: 'v3', auth });
-  const sheets = google.sheets({ version: 'v4', auth });
+  const drive = google.drive({ version: "v3", auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
   try {
     const fileMetadata = {
       name: reportName,
-      mimeType: 'application/vnd.google-apps.spreadsheet',
+      mimeType: "application/vnd.google-apps.spreadsheet",
     };
-    
+
     const file = await drive.files.create({
       requestBody: fileMetadata,
-      fields: 'id, webViewLink',
+      fields: "id, webViewLink",
     });
 
     const spreadsheetId = file.data.id;
@@ -27,11 +31,11 @@ export async function exportToGoogleSheets(accessToken: string, reportName: stri
 
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: 'Sheet1!A1',
-      valueInputOption: 'USER_ENTERED',
+      range: "Sheet1!A1",
+      valueInputOption: "USER_ENTERED",
       requestBody: {
-        values: rows
-      }
+        values: rows,
+      },
     });
 
     return { spreadsheetId, webViewLink };

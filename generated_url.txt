@@ -1,1 +1,0 @@
-postgresql://ai_studio_app_user:~-T%3C~1.(p%2F%2F%3B%5D%25cR@localhost/cloud_sql_development_database?host=/app/cloudsql/pro-cumulus-xmvz5:asia-southeast1:ai-studio-6d6e1991

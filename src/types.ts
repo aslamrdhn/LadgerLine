@@ -6,7 +6,8 @@
 export interface Product {
   id: string;
   name: string;
-  category: 'Coffee' | 'Non-Coffee' | 'Heavy Meals' | 'Snacks' | 'Desserts' | 'Beans';
+  category:
+    "Coffee" | "Non-Coffee" | "Heavy Meals" | "Snacks" | "Desserts" | "Beans";
   price: number;
   costPrice: number; // Untuk menghitung laba bersih/keuangan komprehensif
   stock: number; // Stok barang jadi
@@ -25,7 +26,7 @@ export interface RawMaterial {
   id: string;
   name: string;
   stockQuantity: number;
-  stockUnit: 'g' | 'ml' | 'pcs' | 'Kg';
+  stockUnit: "g" | "ml" | "pcs" | "Kg";
   warningLimit: number;
   supplierId?: string; // ID supplier berelasi
   supplierName: string;
@@ -52,7 +53,7 @@ export interface OrderItem {
   notes?: string;
   priceAtSale: number; // harga saat transaksi berlangsung
   costAtSale: number; // modal saat transaksi
-  variant?: 'HOT' | 'COOL';
+  variant?: "HOT" | "COOL";
 }
 
 export interface Order {
@@ -64,8 +65,8 @@ export interface Order {
   discount: number;
   tax: number;
   totalPrice: number;
-  paymentMethod: 'QRIS' | 'Tunai' | 'Debit' | 'Midtrans' | 'Split';
-  paymentStatus: 'Pending' | 'Success';
+  paymentMethod: "QRIS" | "Tunai" | "Debit" | "Midtrans" | "Split";
+  paymentStatus: "Pending" | "Success";
   receiptPrinted: boolean;
   notes?: string;
   secureHash?: string;
@@ -75,7 +76,7 @@ export interface Order {
 export interface CoffeeTable {
   id: string;
   name: string; // Misal: "Meja 01", "Meja 02"
-  status: 'Empty' | 'Ordering' | 'Occupied';
+  status: "Empty" | "Ordering" | "Occupied";
   qrCodeUrl: string; // URL spesifik pemesanan barcode meja
   publicToken?: string;
   qrImage?: string;
@@ -86,14 +87,14 @@ export interface CoffeeTable {
 export interface FinanceCategory {
   id: string;
   name: string;
-  type: 'income' | 'expense';
+  type: "income" | "expense";
 }
 
 export interface FinanceLog {
   id: string;
   date: string; // YYYY-MM-DD
   time: string; // HH:mm:ss
-  type: 'income' | 'expense';
+  type: "income" | "expense";
   category: string; // Misal: "Penjualan Kopi", "Beli Susu", "Gaji Karyawan", "Sewa Ruko"
   amount: number;
   description: string;
@@ -106,15 +107,15 @@ export interface BackupHistory {
   timestamp: string;
   fileSize: number;
   recordCount: number;
-  status: 'Success' | 'Failed';
+  status: "Success" | "Failed";
   checksum: string;
 }
 
 export interface PrinterDevice {
   name: string;
-  type: 'Bluetooth' | 'WiFi';
+  type: "Bluetooth" | "WiFi";
   address: string;
-  status: 'Disconnected' | 'Connecting' | 'Connected';
+  status: "Disconnected" | "Connecting" | "Connected";
 }
 
 export interface AppConfig {
@@ -127,7 +128,16 @@ export interface AppConfig {
   subscriptionTier?: string; // TIER_1, TIER_2, TIER_3
   ledgerTokenBalance?: number;
   licenseKey: string;
-  theme?: 'slate' | 'espresso' | 'midnight' | 'matcha' | 'royal' | 'crimson' | 'ocean' | 'forest' | 'custom';
+  theme?:
+    | "slate"
+    | "espresso"
+    | "midnight"
+    | "matcha"
+    | "royal"
+    | "crimson"
+    | "ocean"
+    | "forest"
+    | "custom";
   customThemeType?: string;
   customThemeAppBg?: string;
   customThemeAsideBg?: string;
@@ -138,7 +148,7 @@ export interface AppConfig {
   customThemeHeaderText?: string;
   customThemeAccentText?: string;
   customThemeAccentBtn?: string;
-  layoutMode?: 'grid' | 'list';
+  layoutMode?: "grid" | "list";
   cashierName?: string;
   cashierRole?: string;
   cashierShift?: string;
@@ -157,13 +167,13 @@ export interface AppConfig {
   // Security Upgrade Parameters
   ownerPasswordHash?: string;
   ownerEmail?: string;
-  activeOperatorRole?: 'Owner' | 'Supervisor' | 'Kasir';
+  activeOperatorRole?: "Owner" | "Supervisor" | "Kasir";
   clientEncryptionPasskey?: string;
   clientEncryptionEnabled?: boolean;
   failedLoginAttempts?: number;
   lockedUntil?: string; // ISO string for brute-force lock-outs
   // Customizable Tax & Receipt Settings
-  taxType?: 'PPN' | 'PB1' | 'Kustom' | 'NON';
+  taxType?: "PPN" | "PB1" | "Kustom" | "NON";
   taxRateCustom?: number;
   receiptHeader?: string;
   receiptFooter?: string;
@@ -181,7 +191,7 @@ export interface SecurityAuditLog {
   action: string;
   operator: string;
   details: string;
-  severity: 'info' | 'warning' | 'security';
+  severity: "info" | "warning" | "security";
 }
 
 export interface Supplier {
@@ -192,4 +202,3 @@ export interface Supplier {
   notes?: string;
   createdAt: string;
 }
-

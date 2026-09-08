@@ -1,24 +1,42 @@
-import React from 'react';
-import { useUiMode } from '../context/UiModeContext';
-import { useDataStore } from '../store/dataStore';
+import React from "react";
+import { useUiMode } from "../context/UiModeContext";
+import { useDataStore } from "../store/dataStore";
 
 // Lazy loaded modules
-const Dashboard = React.lazy(() => import('../components/Dashboard'));
-const Cashier = React.lazy(() => import('../components/Cashier'));
-const Inventory = React.lazy(() => import('../components/Inventory'));
-const TableOrders = React.lazy(() => import('../components/TableOrders'));
-const FinancialReports = React.lazy(() => import('../components/FinancialReports'));
-const StorefrontProfile = React.lazy(() => import('../components/StorefrontProfile'));
-const ShiftHandover = React.lazy(() => import('../components/ShiftHandover'));
-const SupplierPortal = React.lazy(() => import('../components/SupplierPortal'));
-const DemandIntelligenceCenter = React.lazy(() => import('../components/DemandIntelligenceCenter'));
-const MarketIntelligence = React.lazy(() => import('../components/MarketIntelligence'));
-const BusinessAuditorUI = React.lazy(() => import('../components/BusinessAuditorUI'));
-const SubscriptionPackages = React.lazy(() => import('../components/SubscriptionPackages'));
-const SupplyHubAdmin = React.lazy(() => import('../components/SupplyHubAdmin'));
-const TrueCostDashboard = React.lazy(() => import('../components/TrueCostDashboard'));
-const MigrationCenter = React.lazy(() => import('../components/MigrationCenter'));
-const AdminDashboard = React.lazy(() => import('../components/admin/AdminDashboard'));
+const Dashboard = React.lazy(() => import("../components/analytics/Dashboard"));
+const Cashier = React.lazy(() => import("../components/Cashier"));
+const Inventory = React.lazy(() => import("../components/Inventory"));
+const TableOrders = React.lazy(() => import("../components/TableOrders"));
+const FinancialReports = React.lazy(
+  () => import("../components/reports/FinancialReports"),
+);
+const StorefrontProfile = React.lazy(
+  () => import("../components/StorefrontProfile"),
+);
+const ShiftHandover = React.lazy(() => import("../components/ShiftHandover"));
+const SupplierPortal = React.lazy(() => import("../components/SupplierPortal"));
+const DemandIntelligenceCenter = React.lazy(
+  () => import("../components/analytics/DemandIntelligenceCenter"),
+);
+const MarketIntelligence = React.lazy(
+  () => import("../components/analytics/MarketIntelligence"),
+);
+const BusinessAuditorUI = React.lazy(
+  () => import("../components/analytics/BusinessAuditorUI"),
+);
+const SubscriptionPackages = React.lazy(
+  () => import("../components/SubscriptionPackages"),
+);
+const SupplyHubAdmin = React.lazy(() => import("../components/SupplyHubAdmin"));
+const TrueCostDashboard = React.lazy(
+  () => import("../components/analytics/TrueCostDashboard"),
+);
+const MigrationCenter = React.lazy(
+  () => import("../components/MigrationCenter"),
+);
+const AdminDashboard = React.lazy(
+  () => import("../components/admin/AdminDashboard"),
+);
 
 interface AppRouterProps {
   activeTab: string;
@@ -59,22 +77,37 @@ export function AppRouter({
     appConfig,
   } = useDataStore();
 
-
-  if (activeTab === 'superadmin') {
-      if (currentStore?.cashierRole !== 'SUPER_ADMIN') {
-          return <div className="p-10 text-center text-red-500 font-bold">403 Forbidden: You do not have SuperAdmin privileges.</div>;
-      }
+  if (activeTab === "superadmin") {
+    if (currentStore?.cashierRole !== "SUPER_ADMIN") {
       return (
-        <React.Suspense fallback={<div className="flex h-full items-center justify-center font-bold text-slate-500">Memuat Modul...</div>}>
-            <AdminDashboard />
-        </React.Suspense>
+        <div className="p-10 text-center text-red-500 font-bold">
+          403 Forbidden: You do not have SuperAdmin privileges.
+        </div>
       );
+    }
+    return (
+      <React.Suspense
+        fallback={
+          <div className="flex h-full items-center justify-center font-bold text-slate-500">
+            Memuat Modul...
+          </div>
+        }
+      >
+        <AdminDashboard />
+      </React.Suspense>
+    );
   }
 
   return (
-    <React.Suspense fallback={<div className="flex h-full items-center justify-center font-bold text-slate-500">Memuat Modul...</div>}>
-      {activeTab === 'dashboard' && (
-        <Dashboard 
+    <React.Suspense
+      fallback={
+        <div className="flex h-full items-center justify-center font-bold text-slate-500">
+          Memuat Modul...
+        </div>
+      }
+    >
+      {activeTab === "dashboard" && (
+        <Dashboard
           products={products}
           rawMaterials={rawMaterials}
           financeLogs={financeLogs}
@@ -82,9 +115,9 @@ export function AppRouter({
           onRefresh={onRefresh}
         />
       )}
-      
-      {activeTab === 'kasir' && (
-        <Cashier 
+
+      {activeTab === "kasir" && (
+        <Cashier
           products={products}
           rawMaterials={rawMaterials}
           recipes={recipes}
@@ -94,8 +127,8 @@ export function AppRouter({
         />
       )}
 
-      {activeTab === 'stok' && (
-        <Inventory 
+      {activeTab === "stok" && (
+        <Inventory
           products={products}
           rawMaterials={rawMaterials}
           recipes={recipes}
@@ -104,8 +137,8 @@ export function AppRouter({
         />
       )}
 
-      {activeTab === 'meja' && (
-        <TableOrders 
+      {activeTab === "meja" && (
+        <TableOrders
           tables={tables}
           products={products}
           orders={orders}
@@ -114,8 +147,8 @@ export function AppRouter({
         />
       )}
 
-      {activeTab === 'laporan' && (
-        <FinancialReports 
+      {activeTab === "laporan" && (
+        <FinancialReports
           financeLogs={financeLogs}
           orders={orders}
           products={products}
@@ -126,13 +159,13 @@ export function AppRouter({
         />
       )}
 
-      {activeTab === 'suplierhub' && <SupplierPortal onLogout={() => {}} />}
-            {activeTab === 'intelligence' && <DemandIntelligenceCenter />}
-      {activeTab === 'auditor' && <BusinessAuditorUI />}
-      {activeTab === 'paket' && <SubscriptionPackages />}
-      {activeTab === 'migrasi' && <MigrationCenter />}
-      {activeTab === 'pengaturan' && (
-        <StorefrontProfile 
+      {activeTab === "suplierhub" && <SupplierPortal onLogout={() => {}} />}
+      {activeTab === "intelligence" && <DemandIntelligenceCenter />}
+      {activeTab === "auditor" && <BusinessAuditorUI />}
+      {activeTab === "paket" && <SubscriptionPackages />}
+      {activeTab === "migrasi" && <MigrationCenter />}
+      {activeTab === "pengaturan" && (
+        <StorefrontProfile
           appConfig={appConfig || ({} as any)}
           onUpdateConfig={handleUpdateConfig}
           products={products}

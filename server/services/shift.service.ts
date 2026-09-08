@@ -1,6 +1,6 @@
-import { prisma } from '../lib/prisma.ts';
-import { LedgerError } from '../utils/errorCodes.ts';
-import { Decimal } from '../utils/money.ts';
+import { prisma } from "../lib/prisma.ts";
+import { LedgerError } from "../utils/errorCodes.ts";
+import { Decimal } from "../utils/money.ts";
 
 export class AttendanceService {
   async openShift(cashierId: string, outletId: string) {
@@ -9,16 +9,21 @@ export class AttendanceService {
       select: { tenantId: true },
     });
 
-    if (!user || !user.tenantId) throw new LedgerError('VAL-002', 'User profile not found');
+    if (!user || !user.tenantId)
+      throw new LedgerError("VAL-002", "User profile not found");
 
     const openShift = await prisma.shift.findFirst({
       where: {
         cashierId,
-        status: 'open',
+        status: "open",
       },
     });
 
-    if (openShift) throw new LedgerError('SYS-001', 'A shift is already open for this cashier');
+    if (openShift)
+      throw new LedgerError(
+        "SYS-001",
+        "A shift is already open for this cashier",
+      );
 
     return prisma.shift.create({
       data: {
@@ -26,7 +31,7 @@ export class AttendanceService {
         outletId,
         cashierId,
         startTime: new Date(),
-        status: 'open',
+        status: "open",
       },
     });
   }
@@ -38,8 +43,9 @@ export class AttendanceService {
       where: { id: shiftId },
     });
 
-    if (!shift) throw new LedgerError('VAL-002', 'Shift not found');
-    if (shift.status !== 'open') throw new LedgerError('SYS-001', 'Shift already closed');
+    if (!shift) throw new LedgerError("VAL-002", "Shift not found");
+    if (shift.status !== "open")
+      throw new LedgerError("SYS-001", "Shift already closed");
 
     const now = new Date();
 
@@ -48,7 +54,7 @@ export class AttendanceService {
         tenantId: shift.tenantId,
         outletId: shift.outletId,
         cashierId: shift.cashierId,
-        status: { in: ['POSTED', 'LATE_ENTRY'] },
+        status: { in: ["POSTED", "LATE_ENTRY"] },
         createdAt: {
           gte: shift.startTime,
           lte: now,
@@ -59,8 +65,11 @@ export class AttendanceService {
 
     let expectedCash = salesInShift.reduce((sum, sale) => {
       const cashPayments = sale.payments
-        .filter((p) => p.method === 'CASH')
-        .reduce((s, p) => s.plus(new Decimal(p.amount.toString())), new Decimal(0));
+        .filter((p) => p.method === "CASH")
+        .reduce(
+          (s, p) => s.plus(new Decimal(p.amount.toString())),
+          new Decimal(0),
+        );
       return sum.plus(cashPayments);
     }, new Decimal(0));
 
@@ -74,15 +83,15 @@ export class AttendanceService {
           gte: shift.startTime,
           lte: now,
         },
-        status: 'COMPLETED',
-        refundMethod: 'CASH',
+        status: "COMPLETED",
+        refundMethod: "CASH",
       },
       select: { totalRefund: true },
     });
 
     const refundCash = refundsInShift.reduce(
       (sum, r) => sum.plus(new Decimal(r.totalRefund.toString())),
-      new Decimal(0)
+      new Decimal(0),
     );
 
     expectedCash = expectedCash.minus(refundCash);
@@ -92,7 +101,7 @@ export class AttendanceService {
       where: { id: shiftId },
       data: {
         endTime: now,
-        status: 'closed',
+        status: "closed",
         expectedCash: expectedCash.toNumber(),
         actualCash: actualCash.toNumber(),
         variance: variance.toNumber(),
@@ -104,8 +113,8 @@ export class AttendanceService {
         data: {
           tenantId: shift.tenantId,
           userId: shift.cashierId,
-          action: 'SHIFT_VARIANCE',
-          severity: 'warning',
+          action: "SHIFT_VARIANCE",
+          severity: "warning",
           metadata: JSON.stringify({
             variance: variance.toNumber(),
             expectedCash: expectedCash.toNumber(),
@@ -123,7 +132,7 @@ export class AttendanceService {
     return prisma.shift.findFirst({
       where: {
         cashierId,
-        status: 'open',
+        status: "open",
       },
       include: {
         outlet: { select: { id: true, name: true } },
@@ -137,7 +146,8 @@ export class AttendanceService {
       select: { tenantId: true },
     });
 
-    if (!user || !user.tenantId) throw new LedgerError('VAL-002', 'User not found');
+    if (!user || !user.tenantId)
+      throw new LedgerError("VAL-002", "User not found");
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -152,9 +162,9 @@ export class AttendanceService {
 
     if (existing) {
       const checkOut = new Date();
-      const totalHours = new Decimal(checkOut.getTime() - existing.checkIn.getTime()).dividedBy(
-        1000 * 60 * 60
-      );
+      const totalHours = new Decimal(
+        checkOut.getTime() - existing.checkIn.getTime(),
+      ).dividedBy(1000 * 60 * 60);
 
       return prisma.attendanceLog.update({
         where: { id: existing.id },

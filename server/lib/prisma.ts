@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from "@prisma/client";
 
 declare global {
   var prisma: PrismaClient | undefined;
@@ -6,11 +6,14 @@ declare global {
 
 export const prisma = global.prisma || new PrismaClient();
 
-if (process.env.NODE_ENV !== 'production') {
+if (process.env.NODE_ENV !== "production") {
   global.prisma = prisma;
 }
 
-export type PrismaTransaction = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>;
+export type PrismaTransaction = Omit<
+  PrismaClient,
+  "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
+>;
 
 /**
  * Executes a transaction within the context of a specific tenant.
@@ -18,7 +21,12 @@ export type PrismaTransaction = Omit<PrismaClient, '$connect' | '$disconnect' | 
  */
 export async function withTenant<T>(
   tenantId: string,
-  callback: (tx: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>) => Promise<T>
+  callback: (
+    tx: Omit<
+      PrismaClient,
+      "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
+    >,
+  ) => Promise<T>,
 ): Promise<T> {
   return prisma.$transaction(async (tx) => {
     // Escape the tenantId to prevent SQL injection, though Prisma $executeRaw handles it if passed as parameter

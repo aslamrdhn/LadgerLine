@@ -1,8 +1,11 @@
-import { useQuery } from '@tanstack/react-query';
-import { useDataStore } from '../store/dataStore';
-import { useEffect } from 'react';
+import { useQuery } from "@tanstack/react-query";
+import { useDataStore } from "../store/dataStore";
+import { useEffect } from "react";
 
-export function useAppSync(tenantId: string | undefined, token: string | undefined) {
+export function useAppSync(
+  tenantId: string | undefined,
+  token: string | undefined,
+) {
   const {
     setProducts,
     setRawMaterials,
@@ -10,25 +13,25 @@ export function useAppSync(tenantId: string | undefined, token: string | undefin
     setTables,
     setOrders,
     setFinanceLogs,
-    setAppConfig
+    setAppConfig,
   } = useDataStore();
 
   const query = useQuery({
-    queryKey: ['app-state', tenantId],
+    queryKey: ["app-state", tenantId],
     queryFn: async () => {
       if (!tenantId || !token) throw new Error("No token or tenantId");
-      
-      const response = await fetch('/api/orders/state', {
+
+      const response = await fetch("/api/orders/state", {
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
       });
-      
+
       if (!response.ok) {
-        throw new Error('Failed to fetch state');
+        throw new Error("Failed to fetch state");
       }
-      
+
       return response.json();
     },
     enabled: !!tenantId && !!token,

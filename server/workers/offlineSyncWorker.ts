@@ -1,58 +1,67 @@
-import { prisma, withTenant } from '../lib/prisma.ts';
-import { checkout } from '../services/checkout.service.ts';
-import { publishKitchenOrder } from '../services/kitchen.service.ts';
+import { prisma, withTenant } from "../lib/prisma.ts";
+import { checkout } from "../services/checkout.service.ts";
+import { publishKitchenOrder } from "../services/kitchen.service.ts";
 
 const MAX_ATTEMPTS = 5;
 const BATCH_SIZE = 10;
 const INTERVAL = 10000;
 
 export async function startOfflineSyncWorker() {
-  console.log('🔄 Offline Sync Worker started');
+  console.log("🔄 Offline Sync Worker started");
 
   setInterval(async () => {
     try {
       const pending = await prisma.offlineTransaction.findMany({
         where: {
-          status: 'PENDING_SYNC',
-          attempts: { lt: MAX_ATTEMPTS }
+          status: "PENDING_SYNC",
+          attempts: { lt: MAX_ATTEMPTS },
         },
-        orderBy: { createdAt: 'asc' },
-        take: BATCH_SIZE
+        orderBy: { createdAt: "asc" },
+        take: BATCH_SIZE,
       });
 
       if (!pending || pending.length === 0) return;
 
-      const claimedIds = pending.map(p => p.id);
+      const claimedIds = pending.map((p) => p.id);
       await prisma.offlineTransaction.updateMany({
         where: { id: { in: claimedIds } },
-        data: { status: 'PROCESSING', attempts: { increment: 1 } }
+        data: { status: "PROCESSING", attempts: { increment: 1 } },
       });
 
       for (const row of pending) {
         try {
-          const payload = typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload;
+          const payload =
+            typeof row.payload === "string"
+              ? JSON.parse(row.payload)
+              : row.payload;
           const result = await checkout({
             ...payload,
             tenantId: row.tenantId,
             idempotencyKey: payload.offlineId || payload.idempotencyKey,
             skipPeriodValidation: true,
-            originalBusinessDate: payload.originalBusinessDate || payload.businessDate || null,
+            originalBusinessDate:
+              payload.originalBusinessDate || payload.businessDate || null,
           });
 
           await prisma.offlineTransaction.update({
             where: { id: row.id },
             data: {
-              status: 'SYNCED',
+              status: "SYNCED",
               syncedAt: new Date(),
               salesId: result.sale.id,
             },
           });
 
           if (result.kitchenOrder) {
-            await publishKitchenOrder(result.sale.outletId, result.kitchenOrder);
+            await publishKitchenOrder(
+              result.sale.outletId,
+              result.kitchenOrder,
+            );
           }
 
-          console.log(`✅ Offline transaction ${row.id} synced successfully (Sale: ${result.sale.invoiceNumber})`);
+          console.log(
+            `✅ Offline transaction ${row.id} synced successfully (Sale: ${result.sale.invoiceNumber})`,
+          );
         } catch (error: any) {
           const record = await prisma.offlineTransaction.findUnique({
             where: { id: row.id },
@@ -60,21 +69,26 @@ export async function startOfflineSyncWorker() {
           });
 
           const attempts = record?.attempts || 1;
-          const newStatus = attempts >= MAX_ATTEMPTS ? 'FAILED' : 'PENDING_SYNC';
+          const newStatus =
+            attempts >= MAX_ATTEMPTS ? "FAILED" : "PENDING_SYNC";
 
           await prisma.offlineTransaction.update({
             where: { id: row.id },
             data: {
               status: newStatus,
-              errorMessage: error instanceof Error ? error.message : String(error),
+              errorMessage:
+                error instanceof Error ? error.message : String(error),
             },
           });
 
-          console.warn(`⚠️ Offline tx ${row.id} failed (attempt ${attempts}):`, error.message);
+          console.warn(
+            `⚠️ Offline tx ${row.id} failed (attempt ${attempts}):`,
+            error.message,
+          );
         }
       }
     } catch (error: any) {
-      console.error('❌ Offline sync worker cycle error:', error.message);
+      console.error("❌ Offline sync worker cycle error:", error.message);
     }
   }, INTERVAL);
 }

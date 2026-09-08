@@ -1,31 +1,31 @@
-import swaggerJsdoc from 'swagger-jsdoc';
-import swaggerUi from 'swagger-ui-express';
-import { Express } from 'express';
+import swaggerJsdoc from "swagger-jsdoc";
+import swaggerUi from "swagger-ui-express";
+import { Express } from "express";
 
 const options: swaggerJsdoc.Options = {
   definition: {
-    openapi: '3.0.0',
+    openapi: "3.0.0",
     info: {
-      title: 'LedgerLine API Documentation',
-      version: '1.0.0',
-      description: 'Enterprise Grade POS System API',
+      title: "LedgerLine API Documentation",
+      version: "1.0.0",
+      description: "Enterprise Grade POS System API",
       contact: {
-        name: 'Developer Support',
-        email: 'api@ledgerline.local'
-      }
+        name: "Developer Support",
+        email: "api@ledgerline.local",
+      },
     },
     servers: [
       {
-        url: 'http://localhost:3000',
-        description: 'Development Server',
+        url: "http://localhost:3000",
+        description: "Development Server",
       },
     ],
     components: {
       securitySchemes: {
         bearerAuth: {
-          type: 'http',
-          scheme: 'bearer',
-          bearerFormat: 'JWT',
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT",
         },
       },
     },
@@ -35,11 +35,15 @@ const options: swaggerJsdoc.Options = {
       },
     ],
   },
-  apis: ['./server/modules/**/*.ts', './server/routes/*.ts'], // Scan files for JSDoc annotations
+  apis: ["./server/modules/**/*.ts", "./server/routes/*.ts"], // Scan files for JSDoc annotations
 };
 
 const specs = swaggerJsdoc(options);
 
 export const setupSwagger = (app: Express) => {
-  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, { explorer: true }));
+  app.use(
+    "/api-docs",
+    swaggerUi.serve,
+    swaggerUi.setup(specs, { explorer: true }),
+  );
 };

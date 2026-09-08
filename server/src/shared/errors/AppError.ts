@@ -3,7 +3,7 @@ export class AppError extends Error {
     public statusCode: number,
     public message: string,
     public isOperational = true,
-    public code?: string
+    public code?: string,
   ) {
     super(message);
     Object.setPrototypeOf(this, AppError.prototype);

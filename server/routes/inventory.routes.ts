@@ -1,17 +1,25 @@
-import { FastifyInstance, FastifyPluginAsync } from 'fastify';
-import { authenticateToken, enforceTenantBoundary } from '../middlewares/auth.ts';
-import { StockOpnameService, WasteService } from '../services/inventory.service.ts';
-import { LedgerError } from '../utils/errorCodes.ts';
+import { FastifyInstance, FastifyPluginAsync } from "fastify";
+import {
+  authenticateToken,
+  enforceTenantBoundary,
+} from "../middlewares/auth.ts";
+import {
+  StockOpnameService,
+  WasteService,
+} from "../services/inventory.service.ts";
+import { LedgerError } from "../utils/errorCodes.ts";
 
 const opnameService = new StockOpnameService();
 const wasteService = new WasteService();
 
-export const inventoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
-  fastify.addHook('preHandler', authenticateToken);
-  fastify.addHook('preHandler', enforceTenantBoundary);
+export const inventoryRoutes: FastifyPluginAsync = async (
+  fastify: FastifyInstance,
+) => {
+  fastify.addHook("preHandler", authenticateToken);
+  fastify.addHook("preHandler", enforceTenantBoundary);
 
   // Stock Opname
-  fastify.post('/opname', async (request, reply) => {
+  fastify.post("/opname", async (request, reply) => {
     try {
       const body = request.body as any;
       const tenantId = request.user!.tenantId!;
@@ -35,13 +43,13 @@ export const inventoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
       }
       return reply.code(500).send({
         success: false,
-        error: 'SYS_001',
+        error: "SYS_001",
         message: error.message,
       });
     }
   });
 
-  fastify.post('/opname/:id/confirm', async (request, reply) => {
+  fastify.post("/opname/:id/confirm", async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const userId = request.user!.userId;
@@ -62,13 +70,13 @@ export const inventoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
       }
       return reply.code(500).send({
         success: false,
-        error: 'SYS_001',
+        error: "SYS_001",
         message: error.message,
       });
     }
   });
 
-  fastify.get('/opname', async (request, reply) => {
+  fastify.get("/opname", async (request, reply) => {
     try {
       const { status } = request.query as { status?: string };
       const tenantId = request.user!.tenantId!;
@@ -82,14 +90,14 @@ export const inventoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
     } catch (error: any) {
       return reply.code(500).send({
         success: false,
-        error: 'SYS_001',
+        error: "SYS_001",
         message: error.message,
       });
     }
   });
 
   // Waste Management
-  fastify.post('/waste', async (request, reply) => {
+  fastify.post("/waste", async (request, reply) => {
     try {
       const body = request.body as any;
       const tenantId = request.user!.tenantId!;
@@ -115,13 +123,13 @@ export const inventoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
       }
       return reply.code(500).send({
         success: false,
-        error: 'SYS_001',
+        error: "SYS_001",
         message: error.message,
       });
     }
   });
 
-  fastify.post('/waste/:id/approve', async (request, reply) => {
+  fastify.post("/waste/:id/approve", async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const userId = request.user!.userId;
@@ -142,13 +150,13 @@ export const inventoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
       }
       return reply.code(500).send({
         success: false,
-        error: 'SYS_001',
+        error: "SYS_001",
         message: error.message,
       });
     }
   });
 
-  fastify.get('/waste', async (request, reply) => {
+  fastify.get("/waste", async (request, reply) => {
     try {
       const { status } = request.query as { status?: string };
       const tenantId = request.user!.tenantId!;
@@ -162,7 +170,7 @@ export const inventoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
     } catch (error: any) {
       return reply.code(500).send({
         success: false,
-        error: 'SYS_001',
+        error: "SYS_001",
         message: error.message,
       });
     }

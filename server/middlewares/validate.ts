@@ -1,6 +1,6 @@
-import { Request, Response, NextFunction } from 'express';
-import { ZodSchema, ZodError } from 'zod';
-import { securityLogger } from '../logger.js';
+import { Request, Response, NextFunction } from "express";
+import { ZodSchema, ZodError } from "zod";
+import { securityLogger } from "../logger.js";
 
 export const validateRequest = (schema: ZodSchema) => {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -17,11 +17,13 @@ export const validateRequest = (schema: ZodSchema) => {
       next();
     } catch (error: any) {
       if (error instanceof ZodError) {
-        securityLogger.warn(`[VALIDATION FAILED] Validation failed on ${req.method} ${req.originalUrl}: ${error.issues.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ')}`);
+        securityLogger.warn(
+          `[VALIDATION FAILED] Validation failed on ${req.method} ${req.originalUrl}: ${error.issues.map((e: any) => `${e.path.join(".")}: ${e.message}`).join(", ")}`,
+        );
         return res.status(400).json({
           success: false,
-          message: 'Invalid input data',
-          errors: error.issues
+          message: "Invalid input data",
+          errors: error.issues,
         });
       }
       next(error);

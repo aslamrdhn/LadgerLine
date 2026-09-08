@@ -1,4 +1,4 @@
-import { Decimal } from 'decimal.js';
+import { Decimal } from "decimal.js";
 
 // Configure Decimal globally for money operations
 // We use 20 significant digits and rounding to half up, which is standard for currency
@@ -19,7 +19,9 @@ export function roundMoney(amount: Decimal | string | number): Decimal {
  * Balances an array of journal lines by adjusting penny rounding differences
  * on the credit or debit side to ensure totalDebit == totalCredit.
  */
-export function balanceJournalLines<T extends { debit: Decimal; credit: Decimal }>(lines: T[]): T[] {
+export function balanceJournalLines<
+  T extends { debit: Decimal; credit: Decimal },
+>(lines: T[]): T[] {
   let totalDebit = new Decimal(0);
   let totalCredit = new Decimal(0);
 

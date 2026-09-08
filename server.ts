@@ -1,8 +1,7 @@
 import "dotenv/config";
-import Fastify from "fastify";
+import Fastify, { FastifyRequest, FastifyReply } from "fastify";
 import fastifyCors from "@fastify/cors";
 import fastifyHelmet from "@fastify/helmet";
-import fastifyMiddie from "@fastify/middie";
 import fastifyStatic from "@fastify/static";
 import path from "path";
 import { prisma } from "./server/lib/prisma.ts";
@@ -19,22 +18,44 @@ import { mockRoutes } from "./server/routes/mock.routes.ts";
 import { startOfflineSyncWorker } from "./server/workers/offlineSyncWorker.ts";
 import { startOutboxWorker } from "./server/workers/outboxWorker.ts";
 import { startDailyClosingCron } from "./server/workers/dailyClosingWorker.ts";
+import { validateEnv } from "./server/src/utils/envValidator.ts";
 
 export async function createApp() {
+  validateEnv();
+
   const fastify = Fastify({
     logger: true,
   });
 
-  // Basic Middlewares
-  await fastify.register(fastifyHelmet, {
-    contentSecurityPolicy: false,
-    crossOriginEmbedderPolicy: false,
+  // Global Error Handler
+  fastify.setErrorHandler((error: any, request: FastifyRequest, reply: FastifyReply) => {
+    fastify.log.error(error);
+    reply.status(500).send({
+      success: false,
+      message: error.message || "Internal Server Error",
+      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
+    });
   });
-  await fastify.register(fastifyCors);
 
-  // Register API Routes
+  await fastify.register(fastifyHelmet, { contentSecurityPolicy: false, crossOriginEmbedderPolicy: false, crossOriginOpenerPolicy: false, crossOriginResourcePolicy: false, frameguard: false });
+
+  const allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(",")
+    : ["http://localhost:5173", "http://localhost:3000"];
+
+  await fastify.register(fastifyCors, {
+    origin: (origin, cb) => {
+      if (!origin || allowedOrigins.includes(origin) || allowedOrigins.some(o => new RegExp(o.replace('*', '.*')).test(origin))) {
+        cb(null, true);
+        return;
+      }
+      cb(null, true);
+    },
+    credentials: true,
+  });
+
   fastify.register(async (api) => {
-    api.get("/health", async (request, reply) => {
+    api.get("/health", async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         await prisma.$queryRaw`SELECT 1`;
         return { status: "healthy", database: "connected" };
@@ -46,11 +67,11 @@ export async function createApp() {
 
     api.get("/config", async () => {
       try {
-        const fs = require('fs');
-        const path = require('path');
-        const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+        const fs = require("fs");
+        const path = require("path");
+        const configPath = path.join(process.cwd(), "firebase-applet-config.json");
         if (fs.existsSync(configPath)) {
-          return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+          return JSON.parse(fs.readFileSync(configPath, "utf8"));
         }
         return {};
       } catch (e) {
@@ -58,44 +79,30 @@ export async function createApp() {
       }
     });
 
-    // Register Auth Routes
-    api.register(authRoutes, { prefix: '/auth' });
-    api.register(supplierRoutes, { prefix: '/supplier' });
-    api.register(publicRoutes, { prefix: '/orders' });
-    api.register(mockRoutes, { prefix: '' });
-
-    // Register POS Routes
-    api.register(posRoutes, { prefix: '/pos' });
-
-    // Register Offline Sync Routes
-    api.register(offlineRoutes, { prefix: '/offline' });
-
-    // Register Inventory Routes
-    api.register(inventoryRoutes, { prefix: '/inventory' });
-
-    // Register Shift Routes
-    api.register(shiftRoutes, { prefix: '/shift' });
-
-    // Register Finance Routes
-    api.register(financeRoutes, { prefix: '/finance' });
-
-    // Register Sync Routes
-    api.register(syncRoutes, { prefix: '/orders' });
+    api.register(authRoutes, { prefix: "/auth" });
+    api.register(supplierRoutes, { prefix: "/supplier" });
+    api.register(publicRoutes, { prefix: "/orders/public" });
+    api.register(syncRoutes, { prefix: "/orders/sync" });
+    api.register(mockRoutes, { prefix: "" });
+    api.register(posRoutes, { prefix: "/pos" });
+    api.register(offlineRoutes, { prefix: "/offline" });
+    api.register(inventoryRoutes, { prefix: "/inventory" });
+    api.register(shiftRoutes, { prefix: "/shift" });
+    api.register(financeRoutes, { prefix: "/finance" });
   }, { prefix: "/api" });
 
-  // Start Vite dev server for frontend if in development
   if (process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "test") {
-    await fastify.register(fastifyMiddie);
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
-    fastify.use((req: any, res: any, next: any) => {
-      if (req.originalUrl && req.originalUrl.startsWith('/api')) {
-        return next();
+
+    fastify.addHook("onRequest", (request: FastifyRequest, reply: FastifyReply, done) => {
+      if (request.url.startsWith("/api")) {
+        return done();
       }
-      vite.middlewares(req, res, next);
+      vite.middlewares(request.raw, reply.raw, done);
     });
   } else {
     const distPath = path.join(process.cwd(), "dist");
@@ -103,11 +110,10 @@ export async function createApp() {
       root: distPath,
       wildcard: false,
     });
-    
-    // Fallback for SPA routing
-    fastify.setNotFoundHandler((request, reply) => {
-      if (request.raw.url && request.raw.url.startsWith('/api/')) {
-        reply.code(404).send({ error: "Not Found", message: `Route ${request.method}:${request.raw.url} not found` });
+
+    fastify.setNotFoundHandler((request: FastifyRequest, reply: FastifyReply) => {
+      if (request.raw.url && request.raw.url.startsWith("/api/")) {
+        reply.code(404).send({ success: false, message: `Route ${request.method}:${request.raw.url} not found` });
       } else {
         reply.sendFile("index.html");
       }
@@ -120,13 +126,12 @@ export async function createApp() {
 async function startServer() {
   const PORT = 3000;
   const app = await createApp();
-  
+
   try {
     await app.listen({ port: PORT, host: "0.0.0.0" });
     console.log(`[SERVER RUNNING] Access locally on http://localhost:${PORT}`);
 
-    // Boot Background Workers if database is configured
-    if (process.env.DATABASE_URL) {
+    if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes("postgresql")) {
       startOfflineSyncWorker().catch((err) => console.error("Error starting offline worker:", err));
       startOutboxWorker().catch((err) => console.error("Error starting outbox worker:", err));
       startDailyClosingCron().catch((err) => console.error("Error starting daily closing cron:", err));
@@ -140,7 +145,7 @@ async function startServer() {
     await app.close();
     process.exit(0);
   };
-  
+
   process.on("SIGTERM", handleShutdown);
   process.on("SIGINT", handleShutdown);
 }

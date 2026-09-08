@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { RawMaterial } from '../../types';
-import { FileText, Save, CheckCircle } from 'lucide-react';
-import { useUiStore } from '../../store/uiStore';
+import React, { useState } from "react";
+import { RawMaterial } from "../../types";
+import { FileText, Save, CheckCircle } from "lucide-react";
+import { useUiStore } from "../../store/uiStore";
 
 export function StockOpnameTab({ materials }: { materials: RawMaterial[] }) {
   const { triggerToast } = useUiStore();
@@ -12,11 +12,11 @@ export function StockOpnameTab({ materials }: { materials: RawMaterial[] }) {
     setSubmitting(true);
     try {
       // Simulate API call for opname
-      await new Promise(r => setTimeout(r, 1000));
-      triggerToast('Stock Opname berhasil disimpan (Simulasi)');
+      await new Promise((r) => setTimeout(r, 1000));
+      triggerToast("Stock Opname berhasil disimpan (Simulasi)");
       setOpnameData({});
     } catch (e) {
-      triggerToast('Gagal menyimpan opname');
+      triggerToast("Gagal menyimpan opname");
     } finally {
       setSubmitting(false);
     }
@@ -26,15 +26,20 @@ export function StockOpnameTab({ materials }: { materials: RawMaterial[] }) {
     <div className="space-y-4">
       <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
         <div>
-          <h2 className="text-lg font-black text-slate-800">Stock Opname / Penyesuaian</h2>
-          <p className="text-xs text-slate-500">Sesuaikan stok fisik dengan sistem dan lihat kartu stok</p>
+          <h2 className="text-lg font-black text-slate-800">
+            Stock Opname / Penyesuaian
+          </h2>
+          <p className="text-xs text-slate-500">
+            Sesuaikan stok fisik dengan sistem dan lihat kartu stok
+          </p>
         </div>
-        <button 
+        <button
           onClick={handleSave}
           disabled={submitting || Object.keys(opnameData).length === 0}
           className="px-4 py-2 bg-emerald-600 text-white font-bold rounded-xl text-sm shadow-md hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2"
         >
-          <Save size={16} /> {submitting ? 'Menyimpan...' : 'Simpan Penyesuaian'}
+          <Save size={16} />{" "}
+          {submitting ? "Menyimpan..." : "Simpan Penyesuaian"}
         </button>
       </div>
 
@@ -50,24 +55,41 @@ export function StockOpnameTab({ materials }: { materials: RawMaterial[] }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {materials.map(m => {
-              const actual = opnameData[m.id] !== undefined ? opnameData[m.id] : m.stockQuantity;
+            {materials.map((m) => {
+              const actual =
+                opnameData[m.id] !== undefined
+                  ? opnameData[m.id]
+                  : m.stockQuantity;
               const diff = actual - m.stockQuantity;
               return (
                 <tr key={m.id} className="hover:bg-slate-50/50">
-                  <td className="px-4 py-3 font-semibold text-slate-800">{m.name}</td>
-                  <td className="px-4 py-3 font-mono text-slate-600">{m.stockQuantity} {m.stockUnit}</td>
+                  <td className="px-4 py-3 font-semibold text-slate-800">
+                    {m.name}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-slate-600">
+                    {m.stockQuantity} {m.stockUnit}
+                  </td>
                   <td className="px-4 py-3">
-                    <input 
+                    <input
                       type="number"
                       className="w-24 h-8 px-2 border border-slate-300 rounded text-sm font-mono"
-                      value={opnameData[m.id] !== undefined ? opnameData[m.id] : ''}
+                      value={
+                        opnameData[m.id] !== undefined ? opnameData[m.id] : ""
+                      }
                       placeholder={m.stockQuantity.toString()}
-                      onChange={(e) => setOpnameData({ ...opnameData, [m.id]: parseFloat(e.target.value) || 0 })}
+                      onChange={(e) =>
+                        setOpnameData({
+                          ...opnameData,
+                          [m.id]: parseFloat(e.target.value) || 0,
+                        })
+                      }
                     />
                   </td>
-                  <td className={`px-4 py-3 font-mono font-bold ${diff < 0 ? 'text-rose-600' : diff > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
-                    {diff > 0 ? '+' : ''}{diff} {m.stockUnit}
+                  <td
+                    className={`px-4 py-3 font-mono font-bold ${diff < 0 ? "text-rose-600" : diff > 0 ? "text-emerald-600" : "text-slate-400"}`}
+                  >
+                    {diff > 0 ? "+" : ""}
+                    {diff} {m.stockUnit}
                   </td>
                   <td className="px-4 py-3">
                     <button className="text-xs font-bold text-indigo-600 flex items-center gap-1 hover:underline">
