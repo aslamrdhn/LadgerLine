@@ -40,7 +40,7 @@ export function MainLayout({
   const { uiMode } = useUiMode();
 
   const currentTheme = appConfig.theme || "slate";
-  const theme = {
+  const themes: Record<string, any> = {
     slate: {
       appBg: "bg-[#F8FAFC]",
       asideBg: "bg-[#1E293B]",
@@ -54,7 +54,8 @@ export function MainLayout({
       accentBtn: "bg-emerald-500 hover:bg-emerald-600",
     },
     // Add other themes as needed...
-  }[currentTheme as any] || {
+  };
+  const theme = themes[currentTheme] || {
     appBg: "bg-[#F8FAFC]",
     asideBg: "bg-[#1E293B]",
     border: "border-slate-800/80",

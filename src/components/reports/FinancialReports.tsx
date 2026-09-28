@@ -2595,7 +2595,7 @@ export default function FinancialReports({
                   {isStressing ? (
                     <>
                       <RefreshCw className="animate-spin" size={16} />
-                      Mengeksekusi Simulasi {stressProgress}%...
+                      Mengeksekusi Pengujian Kinerja {stressProgress}%...
                     </>
                   ) : (
                     <>

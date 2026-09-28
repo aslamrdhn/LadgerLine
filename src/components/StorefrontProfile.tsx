@@ -304,7 +304,7 @@ export default function StorefrontProfile({
               }`}
             >
               <Cloud size={14} className="text-indigo-500 animate-pulse" />
-              Koneksi Google Drive (Simulasi Cloud)
+              Koneksi Google Drive (Belum Aktif — perlu OAuth)
             </button>
           </React.Fragment>
         )}

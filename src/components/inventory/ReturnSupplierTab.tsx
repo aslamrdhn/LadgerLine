@@ -2,21 +2,36 @@ import React, { useState } from "react";
 import { RawMaterial } from "../../types";
 import { Undo2, Save } from "lucide-react";
 import { useUiStore } from "../../store/uiStore";
+import { useDataStore } from "../../store/dataStore";
 
 export function ReturnSupplierTab({ materials }: { materials: RawMaterial[] }) {
   const { triggerToast } = useUiStore();
+  const { rawMaterials, setRawMaterials } = useDataStore();
   const [selectedMaterial, setSelectedMaterial] = useState("");
   const [qty, setQty] = useState("");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const handleReturn = async () => {
-    if (!selectedMaterial || !qty || parseFloat(qty) <= 0) return;
+    const returnQty = parseFloat(qty);
+    if (!selectedMaterial || isNaN(returnQty) || returnQty <= 0) return;
     setSubmitting(true);
     try {
-      // Simulate API Call for returning to supplier
-      await new Promise((r) => setTimeout(r, 1000));
-      triggerToast("Proses retur ke supplier berhasil dicatat (Simulasi)");
+      const currentList = rawMaterials.length > 0 ? rawMaterials : materials;
+      const target = currentList.find((m) => m.id === selectedMaterial);
+      if (target && target.stockQuantity < returnQty) {
+        triggerToast(`⚠️ Gagal: Jumlah retur (${returnQty}) melebihi stok tersedia (${target.stockQuantity})!`);
+        setSubmitting(false);
+        return;
+      }
+      const updated = currentList.map((m) => {
+        if (m.id === selectedMaterial) {
+          return { ...m, stockQuantity: Math.max(0, m.stockQuantity - returnQty) };
+        }
+        return m;
+      });
+      setRawMaterials(updated);
+      triggerToast(`✅ Retur bahan baku (${returnQty} unit) berhasil dicatat dan stok disesuaikan!`);
       setQty("");
       setReason("");
       setSelectedMaterial("");

@@ -605,8 +605,14 @@ export default function SupplierPortal({ onLogout }: { onLogout: () => void }) {
                 <strong>Smart Restock Recommendation</strong> milik Coffee Shop.
               </p>
 
-              <button className="w-full bg-slate-800 text-white font-bold text-sm py-2 rounded-lg hover:bg-slate-700 mt-4">
-                Simulasi Perpanjang Langganan
+              <button
+                disabled
+                className="w-full bg-slate-800 text-slate-400 font-bold text-xs py-2.5 rounded-lg border border-slate-700 mt-4 cursor-not-allowed flex items-center justify-center gap-1.5"
+              >
+                <span>Perpanjang Langganan</span>
+                <span className="text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-300 rounded border border-amber-500/30">
+                  Belum Aktif — perlu konfigurasi Payment Gateway
+                </span>
               </button>
             </div>
           </div>

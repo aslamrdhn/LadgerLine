@@ -215,12 +215,10 @@ export function DriveTab({
               </div>
               <h2 className="text-xl font-bold tracking-tight text-white flex items-center gap-2 mt-2">
                 <Cloud size={20} className="text-indigo-400" />
-                Konektor Google Drive (Simulasi Server Cloud)
+                Konektor Google Drive (Belum Aktif — perlu konfigurasi OAuth)
               </h2>
               <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
-                Gunakan Google Drive pribadi Anda sementara sebagai server
-                database penyimpanan awan. Semua data penjualan, stok bahan
-                baku, dan riwayat margin akan dicadangkan aman.
+                Fitur pencadangan otomatis ke Google Drive memerlukan Client ID dan OAuth Google Workspace yang aktif.
               </p>
             </div>
 
@@ -565,7 +563,7 @@ export function DriveTab({
               >
                 {simulatingReport
                   ? "Sedang Mengirim..."
-                  : "Simulasikan & Kirim Laporan Sekarang ✉️"}
+                  : "Kirim Laporan Email Sekarang ✉️ (Belum Aktif — perlu SMTP)"}
               </button>
             </div>
           </div>

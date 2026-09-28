@@ -130,7 +130,7 @@ MEJA   : ${checkoutResult.order.tableNumber}
 PRINTER: ${selectedPrinterModel} (${paperWidth})
 -----------------------------------------
 ${checkoutResult.order.items
-  .map((item) => {
+  .map((item: any) => {
     const prod = products.find((p) => p.id === item.productId);
     return `${prod?.name || "Item"} x${item.quantity}\n          @Rp ${item.priceAtSale.toLocaleString("id-ID")} -> Rp ${(item.priceAtSale * item.quantity).toLocaleString("id-ID")}`;
   })
@@ -163,7 +163,7 @@ PRINTER  : ${selectedPrinterModel} (Kitchen Link)
 Daftar Antrean Porsi Pembuatan Barista/Dapur:
 -----------------------------------------
 ${checkoutResult.order.items
-  .map((item, index) => {
+  .map((item: any, index: number) => {
     const prod = products.find((p) => p.id === item.productId);
     const notesText = item.notes
       ? `   * CATATAN: ${item.notes.toUpperCase()} *`
@@ -213,7 +213,7 @@ ${checkoutResult.order.items
           const characteristics = await targetService.getCharacteristics();
           // Find Write characteristic (usually without notify)
           const writeCharacteristic = characteristics.find(
-            (c) => c.properties.write || c.properties.writeWithoutResponse,
+            (c: any) => c.properties.write || c.properties.writeWithoutResponse,
           );
 
           if (writeCharacteristic) {
@@ -296,7 +296,7 @@ ${checkoutResult.order.items
             <div class="divider"></div>
             ${checkoutResult.order.items
               .map(
-                (item) => `
+                (item: any) => `
               <div><strong>${item.quantity}x ${item.product.name}</strong></div>
               <div class="flex-row">
                 <span>Rp ${item.product.price.toLocaleString("id-ID")}</span>
@@ -497,251 +497,10 @@ ${checkoutResult.order.items
 
                       {/* PRODUCTS LIST thermal style */}
                       <div className="space-y-1.5 text-left text-[9px] font-mono">
-                        {checkoutResult.order.items.map((item, i) => {
+                        {checkoutResult.order.items.map((item: any, i: number) => {
                           const prod = products.find(
                             (p) => p.id === item.productId,
                           );
-                          // Simulasi & Eksekusi Cetak Struk menggunakan Printer Bluetooth / WiFi
-                          const handlePrintReceipt = async () => {
-                            if (!checkoutResult) return;
-                            setPrintingStatus(true);
-                            setTempPrinterLog((prev) => [
-                              ...prev,
-                              `Mengkoneksikan ke printer ${selectedPrinterModel}...`,
-                            ]);
-
-                            let receiptText = "";
-                            if ((receiptType as string) === "customer") {
-                              receiptText = `
------------------------------------------
-      ${appConfig.storeName ? appConfig.storeName.toUpperCase() : "LEDGERLINE BY ASLAM"}
-   ${appConfig.storeAddress || "Indonesia"}
-      TELP: ${appConfig.storePhone || "0812-9988-7766"}
-      ${appConfig.receiptHeader ? `${appConfig.receiptHeader.toUpperCase()}\n` : ""}-----------------------------------------
-ID TX  : ${checkoutResult.order.id}
-TANGGAL: ${new Date(checkoutResult.order.orderTime).toLocaleString("id-ID")}
-KASIR  : Shift Kopi Utama (${printerConnected || "Virtual"} Link)
-MEJA   : ${checkoutResult.order.tableNumber}
-PRINTER: ${selectedPrinterModel} (${paperWidth})
------------------------------------------
-${checkoutResult.order.items
-  .map((item) => {
-    const prod = products.find((p) => p.id === item.productId);
-    return `${prod?.name || "Item"} x${item.quantity}\n          @Rp ${item.priceAtSale.toLocaleString("id-ID")} -> Rp ${(item.priceAtSale * item.quantity).toLocaleString("id-ID")}`;
-  })
-  .join("\n")}
------------------------------------------
-SUBTOTAL    : Rp ${checkoutResult.order.subtotal.toLocaleString("id-ID")}
-DISKON      : Rp ${checkoutResult.order.discount.toLocaleString("id-ID")}
-${taxLabel.toUpperCase()} (${taxPercent}%) : Rp ${checkoutResult.order.tax.toLocaleString("id-ID")}
-GRAND TOTAL : Rp ${checkoutResult.order.totalPrice.toLocaleString("id-ID")}
------------------------------------------
-METODE BAYAR: ${checkoutResult.order.paymentMethod}
------------------------------------------
-   [SHA-256 ENCRYPTED SIGNATURE AUDIT]
-       ${checkoutResult.order.secureHash?.substring(0, 32)}...
------------------------------------------
-      ${appConfig.receiptFooter ? appConfig.receiptFooter.toUpperCase() : "TERIMA KASIH ATAS KUNJUNGANNYA"}
-      POWERED BY LEDGERLINE POS
-\n\n\n`; // Ekstra Enter untuk Thermal Cutter
-                            } else {
-                              receiptText = `
-=========================================
-        TIKET ANTRIAN DAPUR (KOT)
-        KEDAI: ${appConfig.storeName ? appConfig.storeName.toUpperCase() : "ASLAM LEDGER"}
-=========================================
-ID TRANS : ${checkoutResult.order.id}
-TANGGAL  : ${new Date(checkoutResult.order.orderTime).toLocaleDateString("id-ID")} ${new Date(checkoutResult.order.orderTime).toLocaleTimeString("id-ID")}
-LOKASI   : ${(checkoutResult.order.tableNumber || "").toUpperCase()}
-PRINTER  : ${selectedPrinterModel} (Kitchen Link)
------------------------------------------
-Daftar Antrean Porsi Pembuatan Barista/Dapur:
------------------------------------------
-${checkoutResult.order.items
-  .map((item, index) => {
-    const prod = products.find((p) => p.id === item.productId);
-    const notesText = item.notes
-      ? `   * CATATAN: ${item.notes.toUpperCase()} *`
-      : "   (Tanpa instruksi tambahan)";
-    return `${index + 1}. [ Qty: ${item.quantity} ] ${prod?.name?.toUpperCase() || "MENU"}\n${notesText}`;
-  })
-  .join("\n\n")}
------------------------------------------
-* Keamanan & Stok Terverifikasi Sistem POS
-=========================================
-      HARAP DIPROSES SECEPATNYA!
-=========================================
-\n\n\n`;
-                            }
-
-                            // Attempt Direct Web Bluetooth ESC/POS if enabled/supported
-                            if (
-                              (navigator as any).bluetooth &&
-                              selectedPrinterModel
-                                .toLowerCase()
-                                .includes("bluetooth")
-                            ) {
-                              try {
-                                setTempPrinterLog((prev) => [
-                                  ...prev,
-                                  `Meminta akses Bluetooth (Pilih Perangkat)...`,
-                                ]);
-                                const device = await (
-                                  navigator as any
-                                ).bluetooth.requestDevice({
-                                  acceptAllDevices: true,
-                                  optionalServices: [
-                                    "000018f0-0000-1000-8000-00805f9b34fb",
-                                    "e7810a71-73ae-499d-8c15-faa9aef0c3f2",
-                                  ], // Standar ID PRINTER THERMAL
-                                });
-
-                                setTempPrinterLog((prev) => [
-                                  ...prev,
-                                  `Terhubung ke Bluetooth: ${device.name}`,
-                                ]);
-                                const server = await device.gatt?.connect();
-
-                                let targetService;
-                                const services =
-                                  await server?.getPrimaryServices();
-                                if (services && services.length > 0) {
-                                  targetService = services[0];
-                                }
-
-                                if (targetService) {
-                                  const characteristics =
-                                    await targetService.getCharacteristics();
-                                  // Find Write characteristic (usually without notify)
-                                  const writeCharacteristic =
-                                    characteristics.find(
-                                      (c) =>
-                                        c.properties.write ||
-                                        c.properties.writeWithoutResponse,
-                                    );
-
-                                  if (writeCharacteristic) {
-                                    setTempPrinterLog((prev) => [
-                                      ...prev,
-                                      `Mengirim data ke ESC/POS Printer...`,
-                                    ]);
-                                    const encoder = new TextEncoder();
-                                    const data = encoder.encode(receiptText);
-                                    // Print commands for ESC/POS (Initialize, Text, Feed Lines)
-                                    const initEsc = new Uint8Array([
-                                      0x1b, 0x40,
-                                    ]);
-                                    await writeCharacteristic.writeValue(
-                                      initEsc,
-                                    );
-
-                                    // Chunking because BLE MTU might be 20-512 bytes limit
-                                    for (let i = 0; i < data.length; i += 100) {
-                                      await writeCharacteristic.writeValue(
-                                        data.slice(i, i + 100),
-                                      );
-                                    }
-
-                                    setTempPrinterLog((prev) => [
-                                      ...prev,
-                                      `Struk berhasil dicetak di Printer Thermal Bluetooth!`,
-                                    ]);
-                                    setPrintingStatus(false);
-                                    return; // Selesai
-                                  }
-                                }
-                              } catch (err: any) {
-                                setTempPrinterLog((prev) => [
-                                  ...prev,
-                                  `Gagal koneksi Bluetooth Thermal: ${err.message}. Mencoba mode browser dialog fallback...`,
-                                ]);
-                              }
-                            }
-
-                            // Fallback Timer Mock / Browser Print
-                            setTimeout(() => {
-                              setTempPrinterLog((prev) => [
-                                ...prev,
-                                `Koneksi ${selectedPrinterModel} Stabil.`,
-                                `Transmitting print jobs successfully...`,
-                                `Cetak ${(receiptType as string) === "customer" ? "Struk Transaksi" : "Tiket Antrean Dapur"} ${checkoutResult.order.id} Selesai!`,
-                              ]);
-                              setPrintingStatus(false);
-
-                              // Buka dialog printer web browser orisinil untuk real-world hardware compatibility
-                              const printFriendly = window.open("", "_blank");
-                              if (printFriendly) {
-                                const enhancedReceiptHTML = `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>Cetak Struk</title>
-            <style>
-              @page { margin: 0; }
-              body { 
-                font-family: 'Courier New', Courier, monospace; 
-                width: 58mm; 
-                margin: 0 auto; 
-                padding: 10px; 
-                font-size: 12px; 
-                color: #000;
-              }
-              .center { text-align: center; }
-              .divider { border-top: 1px dashed #000; margin: 5px 0; }
-              .flex-row { display: flex; justify-content: space-between; }
-            </style>
-          </head>
-          <body>
-            <div class="center">
-              <strong>${appConfig.storeName ? appConfig.storeName.toUpperCase() : "LEDGERLINE BY ASLAM"}</strong><br/>
-              ${appConfig.storeAddress || "Indonesia"}<br/>
-              TELP: ${appConfig.storePhone || "0812-9988-7766"}<br/>
-              ${appConfig.receiptHeader ? appConfig.receiptHeader.toUpperCase() + "<br/>" : ""}
-            </div>
-            <div class="divider"></div>
-            <div>ID TX: ${checkoutResult.order.id}</div>
-            <div>TANGGAL: ${new Date(checkoutResult.order.orderTime).toLocaleString("id-ID")}</div>
-            <div>KASIR: Shift Kopi Utama</div>
-            <div>MEJA: ${checkoutResult.order.tableNumber}</div>
-            <div class="divider"></div>
-            ${checkoutResult.order.items
-              .map(
-                (item) => `
-              <div><strong>${item.quantity}x ${item.product.name}</strong></div>
-              <div class="flex-row">
-                <span>Rp ${item.product.price.toLocaleString("id-ID")}</span>
-                <span>Rp ${(item.product.price * item.quantity).toLocaleString("id-ID")}</span>
-              </div>
-            `,
-              )
-              .join("")}
-            <div class="divider"></div>
-            <div class="flex-row"><span>SUBTOTAL:</span><span>Rp ${checkoutResult.order.subtotal.toLocaleString("id-ID")}</span></div>
-            <div class="flex-row"><span>DISKON:</span><span>-Rp ${checkoutResult.order.discount.toLocaleString("id-ID")}</span></div>
-            <div class="flex-row"><span>PAJAK:</span><span>Rp ${checkoutResult.order.tax.toLocaleString("id-ID")}</span></div>
-            <div class="divider"></div>
-            <div class="flex-row"><strong>TOTAL:</strong><strong>Rp ${checkoutResult.order.totalPrice.toLocaleString("id-ID")}</strong></div>
-            <div class="divider"></div>
-            <div class="center">
-              Terima Kasih!<br/>
-              Simpan struk ini sebagai bukti pembayaran.
-            </div>
-          </body>
-          </html>
-        `;
-                                printFriendly.document.write(
-                                  enhancedReceiptHTML,
-                                );
-                                printFriendly.document.close();
-                                printFriendly.focus();
-                                setTimeout(() => {
-                                  printFriendly.print();
-                                  printFriendly.close();
-                                }, 500);
-                              }
-                            }, 1200);
-                          };
-
                           return (
                             <div
                               key={i}
@@ -868,251 +627,10 @@ ${checkoutResult.order.items
 
                       {/* PRODUCTS LIST thermal style without pricing */}
                       <div className="space-y-3.5 text-left text-[9px] pt-1 font-mono">
-                        {checkoutResult.order.items.map((item, i) => {
+                        {checkoutResult.order.items.map((item: any, i: number) => {
                           const prod = products.find(
                             (p) => p.id === item.productId,
                           );
-                          // Simulasi & Eksekusi Cetak Struk menggunakan Printer Bluetooth / WiFi
-                          const handlePrintReceipt = async () => {
-                            if (!checkoutResult) return;
-                            setPrintingStatus(true);
-                            setTempPrinterLog((prev) => [
-                              ...prev,
-                              `Mengkoneksikan ke printer ${selectedPrinterModel}...`,
-                            ]);
-
-                            let receiptText = "";
-                            if ((receiptType as string) === "customer") {
-                              receiptText = `
------------------------------------------
-      ${appConfig.storeName ? appConfig.storeName.toUpperCase() : "LEDGERLINE BY ASLAM"}
-   ${appConfig.storeAddress || "Indonesia"}
-      TELP: ${appConfig.storePhone || "0812-9988-7766"}
-      ${appConfig.receiptHeader ? `${appConfig.receiptHeader.toUpperCase()}\n` : ""}-----------------------------------------
-ID TX  : ${checkoutResult.order.id}
-TANGGAL: ${new Date(checkoutResult.order.orderTime).toLocaleString("id-ID")}
-KASIR  : Shift Kopi Utama (${printerConnected || "Virtual"} Link)
-MEJA   : ${checkoutResult.order.tableNumber}
-PRINTER: ${selectedPrinterModel} (${paperWidth})
------------------------------------------
-${checkoutResult.order.items
-  .map((item) => {
-    const prod = products.find((p) => p.id === item.productId);
-    return `${prod?.name || "Item"} x${item.quantity}\n          @Rp ${item.priceAtSale.toLocaleString("id-ID")} -> Rp ${(item.priceAtSale * item.quantity).toLocaleString("id-ID")}`;
-  })
-  .join("\n")}
------------------------------------------
-SUBTOTAL    : Rp ${checkoutResult.order.subtotal.toLocaleString("id-ID")}
-DISKON      : Rp ${checkoutResult.order.discount.toLocaleString("id-ID")}
-${taxLabel.toUpperCase()} (${taxPercent}%) : Rp ${checkoutResult.order.tax.toLocaleString("id-ID")}
-GRAND TOTAL : Rp ${checkoutResult.order.totalPrice.toLocaleString("id-ID")}
------------------------------------------
-METODE BAYAR: ${checkoutResult.order.paymentMethod}
------------------------------------------
-   [SHA-256 ENCRYPTED SIGNATURE AUDIT]
-       ${checkoutResult.order.secureHash?.substring(0, 32)}...
------------------------------------------
-      ${appConfig.receiptFooter ? appConfig.receiptFooter.toUpperCase() : "TERIMA KASIH ATAS KUNJUNGANNYA"}
-      POWERED BY LEDGERLINE POS
-\n\n\n`; // Ekstra Enter untuk Thermal Cutter
-                            } else {
-                              receiptText = `
-=========================================
-        TIKET ANTRIAN DAPUR (KOT)
-        KEDAI: ${appConfig.storeName ? appConfig.storeName.toUpperCase() : "ASLAM LEDGER"}
-=========================================
-ID TRANS : ${checkoutResult.order.id}
-TANGGAL  : ${new Date(checkoutResult.order.orderTime).toLocaleDateString("id-ID")} ${new Date(checkoutResult.order.orderTime).toLocaleTimeString("id-ID")}
-LOKASI   : ${(checkoutResult.order.tableNumber || "").toUpperCase()}
-PRINTER  : ${selectedPrinterModel} (Kitchen Link)
------------------------------------------
-Daftar Antrean Porsi Pembuatan Barista/Dapur:
------------------------------------------
-${checkoutResult.order.items
-  .map((item, index) => {
-    const prod = products.find((p) => p.id === item.productId);
-    const notesText = item.notes
-      ? `   * CATATAN: ${item.notes.toUpperCase()} *`
-      : "   (Tanpa instruksi tambahan)";
-    return `${index + 1}. [ Qty: ${item.quantity} ] ${prod?.name?.toUpperCase() || "MENU"}\n${notesText}`;
-  })
-  .join("\n\n")}
------------------------------------------
-* Keamanan & Stok Terverifikasi Sistem POS
-=========================================
-      HARAP DIPROSES SECEPATNYA!
-=========================================
-\n\n\n`;
-                            }
-
-                            // Attempt Direct Web Bluetooth ESC/POS if enabled/supported
-                            if (
-                              (navigator as any).bluetooth &&
-                              selectedPrinterModel
-                                .toLowerCase()
-                                .includes("bluetooth")
-                            ) {
-                              try {
-                                setTempPrinterLog((prev) => [
-                                  ...prev,
-                                  `Meminta akses Bluetooth (Pilih Perangkat)...`,
-                                ]);
-                                const device = await (
-                                  navigator as any
-                                ).bluetooth.requestDevice({
-                                  acceptAllDevices: true,
-                                  optionalServices: [
-                                    "000018f0-0000-1000-8000-00805f9b34fb",
-                                    "e7810a71-73ae-499d-8c15-faa9aef0c3f2",
-                                  ], // Standar ID PRINTER THERMAL
-                                });
-
-                                setTempPrinterLog((prev) => [
-                                  ...prev,
-                                  `Terhubung ke Bluetooth: ${device.name}`,
-                                ]);
-                                const server = await device.gatt?.connect();
-
-                                let targetService;
-                                const services =
-                                  await server?.getPrimaryServices();
-                                if (services && services.length > 0) {
-                                  targetService = services[0];
-                                }
-
-                                if (targetService) {
-                                  const characteristics =
-                                    await targetService.getCharacteristics();
-                                  // Find Write characteristic (usually without notify)
-                                  const writeCharacteristic =
-                                    characteristics.find(
-                                      (c) =>
-                                        c.properties.write ||
-                                        c.properties.writeWithoutResponse,
-                                    );
-
-                                  if (writeCharacteristic) {
-                                    setTempPrinterLog((prev) => [
-                                      ...prev,
-                                      `Mengirim data ke ESC/POS Printer...`,
-                                    ]);
-                                    const encoder = new TextEncoder();
-                                    const data = encoder.encode(receiptText);
-                                    // Print commands for ESC/POS (Initialize, Text, Feed Lines)
-                                    const initEsc = new Uint8Array([
-                                      0x1b, 0x40,
-                                    ]);
-                                    await writeCharacteristic.writeValue(
-                                      initEsc,
-                                    );
-
-                                    // Chunking because BLE MTU might be 20-512 bytes limit
-                                    for (let i = 0; i < data.length; i += 100) {
-                                      await writeCharacteristic.writeValue(
-                                        data.slice(i, i + 100),
-                                      );
-                                    }
-
-                                    setTempPrinterLog((prev) => [
-                                      ...prev,
-                                      `Struk berhasil dicetak di Printer Thermal Bluetooth!`,
-                                    ]);
-                                    setPrintingStatus(false);
-                                    return; // Selesai
-                                  }
-                                }
-                              } catch (err: any) {
-                                setTempPrinterLog((prev) => [
-                                  ...prev,
-                                  `Gagal koneksi Bluetooth Thermal: ${err.message}. Mencoba mode browser dialog fallback...`,
-                                ]);
-                              }
-                            }
-
-                            // Fallback Timer Mock / Browser Print
-                            setTimeout(() => {
-                              setTempPrinterLog((prev) => [
-                                ...prev,
-                                `Koneksi ${selectedPrinterModel} Stabil.`,
-                                `Transmitting print jobs successfully...`,
-                                `Cetak ${(receiptType as string) === "customer" ? "Struk Transaksi" : "Tiket Antrean Dapur"} ${checkoutResult.order.id} Selesai!`,
-                              ]);
-                              setPrintingStatus(false);
-
-                              // Buka dialog printer web browser orisinil untuk real-world hardware compatibility
-                              const printFriendly = window.open("", "_blank");
-                              if (printFriendly) {
-                                const enhancedReceiptHTML = `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>Cetak Struk</title>
-            <style>
-              @page { margin: 0; }
-              body { 
-                font-family: 'Courier New', Courier, monospace; 
-                width: 58mm; 
-                margin: 0 auto; 
-                padding: 10px; 
-                font-size: 12px; 
-                color: #000;
-              }
-              .center { text-align: center; }
-              .divider { border-top: 1px dashed #000; margin: 5px 0; }
-              .flex-row { display: flex; justify-content: space-between; }
-            </style>
-          </head>
-          <body>
-            <div class="center">
-              <strong>${appConfig.storeName ? appConfig.storeName.toUpperCase() : "LEDGERLINE BY ASLAM"}</strong><br/>
-              ${appConfig.storeAddress || "Indonesia"}<br/>
-              TELP: ${appConfig.storePhone || "0812-9988-7766"}<br/>
-              ${appConfig.receiptHeader ? appConfig.receiptHeader.toUpperCase() + "<br/>" : ""}
-            </div>
-            <div class="divider"></div>
-            <div>ID TX: ${checkoutResult.order.id}</div>
-            <div>TANGGAL: ${new Date(checkoutResult.order.orderTime).toLocaleString("id-ID")}</div>
-            <div>KASIR: Shift Kopi Utama</div>
-            <div>MEJA: ${checkoutResult.order.tableNumber}</div>
-            <div class="divider"></div>
-            ${checkoutResult.order.items
-              .map(
-                (item) => `
-              <div><strong>${item.quantity}x ${item.product.name}</strong></div>
-              <div class="flex-row">
-                <span>Rp ${item.product.price.toLocaleString("id-ID")}</span>
-                <span>Rp ${(item.product.price * item.quantity).toLocaleString("id-ID")}</span>
-              </div>
-            `,
-              )
-              .join("")}
-            <div class="divider"></div>
-            <div class="flex-row"><span>SUBTOTAL:</span><span>Rp ${checkoutResult.order.subtotal.toLocaleString("id-ID")}</span></div>
-            <div class="flex-row"><span>DISKON:</span><span>-Rp ${checkoutResult.order.discount.toLocaleString("id-ID")}</span></div>
-            <div class="flex-row"><span>PAJAK:</span><span>Rp ${checkoutResult.order.tax.toLocaleString("id-ID")}</span></div>
-            <div class="divider"></div>
-            <div class="flex-row"><strong>TOTAL:</strong><strong>Rp ${checkoutResult.order.totalPrice.toLocaleString("id-ID")}</strong></div>
-            <div class="divider"></div>
-            <div class="center">
-              Terima Kasih!<br/>
-              Simpan struk ini sebagai bukti pembayaran.
-            </div>
-          </body>
-          </html>
-        `;
-                                printFriendly.document.write(
-                                  enhancedReceiptHTML,
-                                );
-                                printFriendly.document.close();
-                                printFriendly.focus();
-                                setTimeout(() => {
-                                  printFriendly.print();
-                                  printFriendly.close();
-                                }, 500);
-                              }
-                            }, 1200);
-                          };
-
                           return (
                             <div
                               key={i}
@@ -1274,7 +792,7 @@ ${checkoutResult.order.items
                       className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[9px] uppercase tracking-wider rounded-md transition-all flex items-center justify-center gap-1 cursor-pointer shadow-xs shadow-emerald-500/10 animate-fade-in"
                     >
                       <CheckCircle2 size={11} />
-                      Simulasi Pelanggan Scan Berhasil
+                      Konfirmasi Pembayaran QRIS Diterima
                     </button>
                   ) : (
                     <button
@@ -1705,8 +1223,7 @@ ${checkoutResult.order.items
                               Kartu Kredit / Debit Online
                             </p>
                             <p className="text-[9px] text-slate-400">
-                              Simulasi transaksi online menggunakan kartu
-                              Visa/Mastercard
+                              Transaksi online menggunakan kartu Visa/Mastercard
                             </p>
                           </div>
                         </div>
@@ -1729,7 +1246,7 @@ ${checkoutResult.order.items
                         Pembayaran dengan GoPay / QRIS
                       </p>
 
-                      {/* Simulated Elegant QRIS Code Box */}
+                      {/* QRIS Code Box */}
                       <div className="bg-slate-50 p-3 rounded-xl border border-slate-350 border-dashed relative overflow-hidden flex flex-col items-center">
                         <QrCode size={110} className="text-slate-900" />
                         <span className="mt-1.5 text-[8px] font-mono font-bold tracking-widest text-slate-500 uppercase">
@@ -1739,8 +1256,7 @@ ${checkoutResult.order.items
 
                       <p className="text-[9px] text-slate-400 max-w-[280px] leading-relaxed">
                         Pindai kode QRIS di atas dengan aplikasi GoPay, OVO,
-                        Dana, atau mobile banking Anda untuk simulasi pembayaran
-                        instan.
+                        Dana, atau mobile banking pelanggan untuk pembayaran.
                       </p>
 
                       <button
@@ -1753,7 +1269,7 @@ ${checkoutResult.order.items
                         className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black text-[10px] uppercase tracking-wider rounded-lg transition-all cursor-pointer shadow-md flex justify-center items-center gap-1.5 active:scale-95 text-center"
                       >
                         <CheckCircle2 size={12} />
-                        Simulasikan Scan & Bayar Sukses (GoPay)
+                        Konfirmasi Pembayaran GoPay Diterima
                       </button>
                     </div>
                   )}
@@ -1874,7 +1390,7 @@ ${checkoutResult.order.items
                         className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black text-[10px] uppercase tracking-wider rounded-lg transition-all cursor-pointer shadow-md flex justify-center items-center gap-1.5 active:scale-95 text-center"
                       >
                         <CheckCircle2 size={12} />
-                        Simulasikan Transfer Sukses
+                        Konfirmasi Penerimaan Transfer VA
                       </button>
                     </div>
                   )}
@@ -2189,12 +1705,12 @@ ${checkoutResult.order.items
 
                   navigator.clipboard.writeText(text);
                   triggerCashierToast(
-                    "📋 Teks patungan berhasil disalin ke clipboard! Kirim langsung ke WhatsApp grup teman Anda.",
+                    "📋 Teks patungan berhasil disalin ke clipboard! Siap dibagikan ke WhatsApp grup teman Anda.",
                   );
                 }}
                 className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-950 font-extrabold text-[#D9F99D] hover:text-[#BEF264] text-[9.5px] rounded-lg cursor-pointer flex items-center gap-1.5 transition-colors border border-slate-800"
               >
-                💬 Simulasikan Bagikan Slip Patungan ke WhatsApp
+                💬 Salin & Bagikan Slip Patungan ke WhatsApp
               </button>
             </div>
           </div>

@@ -1,7 +1,8 @@
 import { z } from 'zod';
 
 const envSchema = z.object({
-  DATABASE_URL: z.string().min(1),
+  DATABASE_URL: z.string().optional(),
+  SQLITE_URL: z.string().optional(),
   REDIS_URL: z.string().optional(),
   PORT: z.string().regex(/^\d+$/).default('3000'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),

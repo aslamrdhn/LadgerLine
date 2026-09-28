@@ -1,9 +1,15 @@
 import "dotenv/config";
+import path from "path";
+
+if (!process.env.SQLITE_URL) {
+  const dbPath = path.resolve(process.cwd(), "prisma/dev.db");
+  process.env.SQLITE_URL = `file:${dbPath}`;
+}
+
 import Fastify, { FastifyRequest, FastifyReply } from "fastify";
 import fastifyCors from "@fastify/cors";
 import fastifyHelmet from "@fastify/helmet";
 import fastifyStatic from "@fastify/static";
-import path from "path";
 import { prisma } from "./server/lib/prisma.ts";
 import { authRoutes } from "./server/routes/auth.routes.ts";
 import { posRoutes } from "./server/routes/pos.routes.ts";
@@ -15,6 +21,7 @@ import { syncRoutes } from "./server/routes/sync.routes.ts";
 import { supplierRoutes } from "./server/routes/supplier.routes.ts";
 import { publicRoutes } from "./server/routes/public.routes.ts";
 import { mockRoutes } from "./server/routes/mock.routes.ts";
+import { migrationRoutes } from "./server/routes/migration.routes.ts";
 import { startOfflineSyncWorker } from "./server/workers/offlineSyncWorker.ts";
 import { startOutboxWorker } from "./server/workers/outboxWorker.ts";
 import { startDailyClosingCron } from "./server/workers/dailyClosingWorker.ts";
@@ -89,6 +96,7 @@ export async function createApp() {
     api.register(inventoryRoutes, { prefix: "/inventory" });
     api.register(shiftRoutes, { prefix: "/shift" });
     api.register(financeRoutes, { prefix: "/finance" });
+    api.register(migrationRoutes, { prefix: "/migration" });
   }, { prefix: "/api" });
 
   if (process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "test") {
@@ -131,10 +139,13 @@ async function startServer() {
     await app.listen({ port: PORT, host: "0.0.0.0" });
     console.log(`[SERVER RUNNING] Access locally on http://localhost:${PORT}`);
 
-    if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes("postgresql")) {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
       startOfflineSyncWorker().catch((err) => console.error("Error starting offline worker:", err));
       startOutboxWorker().catch((err) => console.error("Error starting outbox worker:", err));
       startDailyClosingCron().catch((err) => console.error("Error starting daily closing cron:", err));
+    } catch (err: any) {
+      console.warn("⚠️ Background workers not started because database connection check failed:", err.message);
     }
   } catch (err) {
     app.log.error(err);

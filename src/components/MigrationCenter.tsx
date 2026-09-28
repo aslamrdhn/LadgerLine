@@ -20,11 +20,14 @@ export default function MigrationCenter() {
     setLoading(true);
     try {
       const res = await fetch("/api/migration/requests");
+      if (!res.ok) {
+        setRequests([]);
+        return;
+      }
       const data = await res.json();
       if (Array.isArray(data)) {
         setRequests(data);
       } else {
-        console.error("Expected array, got:", data);
         setRequests([]);
       }
     } catch (e) {
@@ -242,7 +245,7 @@ function MigrationWorkspace({
   const validateData = () => {
     if (!mapping.name) return alert("Name column must be mapped");
     const existingNames = new Set();
-    const dups = [];
+    const dups: Array<{ row: number; name: any }> = [];
     csvData.forEach((row, i) => {
       const name = row[mapping.name];
       if (name) {

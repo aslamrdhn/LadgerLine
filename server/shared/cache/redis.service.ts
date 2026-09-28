@@ -38,7 +38,12 @@ export const getRedisClient = (): Redis => {
     }
   }
 
-  return redisClient;
+  return (
+    redisClient ||
+    (new Proxy({} as any, {
+      get: () => async () => null,
+    }) as unknown as Redis)
+  );
 };
 
 export const clearCacheByPattern = async (pattern: string) => {

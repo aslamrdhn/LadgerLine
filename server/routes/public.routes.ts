@@ -72,7 +72,7 @@ export async function publicRoutes(fastify: FastifyInstance) {
 
       // map items to rawItems format expected by checkout.service
       const rawItems = payload.items.map((it: any) => {
-        let mod = [];
+        const mod: string[] = [];
         if (it.selectedModifiers) {
           Object.values(it.selectedModifiers).forEach((arr: any) => {
             if (Array.isArray(arr)) mod.push(...arr);

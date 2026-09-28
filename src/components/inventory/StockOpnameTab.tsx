@@ -2,18 +2,26 @@ import React, { useState } from "react";
 import { RawMaterial } from "../../types";
 import { FileText, Save, CheckCircle } from "lucide-react";
 import { useUiStore } from "../../store/uiStore";
+import { useDataStore } from "../../store/dataStore";
 
 export function StockOpnameTab({ materials }: { materials: RawMaterial[] }) {
   const { triggerToast } = useUiStore();
+  const { rawMaterials, setRawMaterials } = useDataStore();
   const [opnameData, setOpnameData] = useState<Record<string, number>>({});
   const [submitting, setSubmitting] = useState(false);
 
   const handleSave = async () => {
     setSubmitting(true);
     try {
-      // Simulate API call for opname
-      await new Promise((r) => setTimeout(r, 1000));
-      triggerToast("Stock Opname berhasil disimpan (Simulasi)");
+      // Update actual stock in store
+      const updated = (rawMaterials.length > 0 ? rawMaterials : materials).map((m) => {
+        if (opnameData[m.id] !== undefined) {
+          return { ...m, stockQuantity: opnameData[m.id] };
+        }
+        return m;
+      });
+      setRawMaterials(updated);
+      triggerToast("✅ Penyesuaian Stock Opname berhasil disimpan ke database lokal!");
       setOpnameData({});
     } catch (e) {
       triggerToast("Gagal menyimpan opname");

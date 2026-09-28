@@ -1,7 +1,19 @@
+import path from 'path';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
-const prisma = new PrismaClient();
+if (!process.env.SQLITE_URL) {
+  const dbPath = path.resolve(process.cwd(), 'prisma/dev.db');
+  process.env.SQLITE_URL = `file:${dbPath}`;
+}
+
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.SQLITE_URL,
+    },
+  },
+});
 
 async function main() {
   console.log('🌱 Seeding Sprint 0 Minimal Data...');
