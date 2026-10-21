@@ -5,7 +5,17 @@ interface ToastMessage {
   message: string;
 }
 
+export interface SimpleCartItem {
+  menuId: string;
+  qty: number;
+}
+
 interface UiStoreState {
+  cart: SimpleCartItem[];
+  addToCart: (menuId: string) => void;
+  removeFromCart: (menuId: string) => void;
+  clearCart: () => void;
+
   toasts: ToastMessage[];
   triggerToast: (message: string) => void;
   removeToast: (id: string) => void;
@@ -17,6 +27,31 @@ interface UiStoreState {
 }
 
 export const useUiStore = create<UiStoreState>((set) => ({
+  cart: [],
+  addToCart: (menuId) =>
+    set((state) => {
+      const idx = state.cart.findIndex((c) => c.menuId === menuId);
+      if (idx >= 0) {
+        const next = [...state.cart];
+        next[idx] = { ...next[idx], qty: next[idx].qty + 1 };
+        return { cart: next };
+      }
+      return { cart: [...state.cart, { menuId, qty: 1 }] };
+    }),
+  removeFromCart: (menuId) =>
+    set((state) => {
+      const idx = state.cart.findIndex((c) => c.menuId === menuId);
+      if (idx < 0) return state;
+      const item = state.cart[idx];
+      if (item.qty > 1) {
+        const next = [...state.cart];
+        next[idx] = { ...item, qty: item.qty - 1 };
+        return { cart: next };
+      }
+      return { cart: state.cart.filter((c) => c.menuId !== menuId) };
+    }),
+  clearCart: () => set({ cart: [] }),
+
   toasts: [],
   triggerToast: (message) => {
     const id = Math.random().toString(36).substring(2, 9);
@@ -56,3 +91,6 @@ export const useUiStore = create<UiStoreState>((set) => ({
     set({ auditLogs: [] });
   },
 }));
+
+export const useUIStore = useUiStore;
+

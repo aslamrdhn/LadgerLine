@@ -67,11 +67,15 @@ export function ReturnSupplierTab({ materials }: { materials: RawMaterial[] }) {
               onChange={(e) => setSelectedMaterial(e.target.value)}
             >
               <option value="">-- Pilih Bahan Baku --</option>
-              {materials.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name} (Stok: {m.stockQuantity} {m.stockUnit})
-                </option>
-              ))}
+              {materials.map((m) => {
+                const stock = Number(m.stockQuantity ?? (m as any).stock ?? 0);
+                const unit = m.stockUnit || (m as any).unit || "pcs";
+                return (
+                  <option key={m.id} value={m.id}>
+                    {m.name} (Stok: {stock} {unit})
+                  </option>
+                );
+              })}
             </select>
           </div>
 

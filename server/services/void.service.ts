@@ -243,6 +243,12 @@ async function createVoidReversingJournal(
   };
 
   const cashAccount = await getOrCreateAccount("KAS", "Kas", "ASSET", "DEBIT");
+  const bankAccount = await getOrCreateAccount(
+    "BANK",
+    "Bank / Non-Tunai / QRIS",
+    "ASSET",
+    "DEBIT",
+  );
   const revenueAccount = await getOrCreateAccount(
     "PENDAPATAN",
     "Pendapatan Penjualan",
@@ -282,12 +288,20 @@ async function createVoidReversingJournal(
     sale.discount ? sale.discount.toString() : 0,
   );
 
+  const cashTotal = (sale.payments || [])
+    .filter((p: any) => p.method === "CASH")
+    .reduce(
+      (sum: Decimal, p: any) => sum.plus(new Decimal(p.amount.toString())),
+      new Decimal(0),
+    );
+  const digitalTotal = (sale.payments || [])
+    .filter((p: any) => p.method !== "CASH")
+    .reduce(
+      (sum: Decimal, p: any) => sum.plus(new Decimal(p.amount.toString())),
+      new Decimal(0),
+    );
+
   let lines = [
-    {
-      accountId: cashAccount.id,
-      debit: new Decimal(0),
-      credit: new Decimal(sale.totalAmount.toString()),
-    },
     {
       accountId: revenueAccount.id,
       debit: afterDiscount,
@@ -316,6 +330,28 @@ async function createVoidReversingJournal(
       credit: new Decimal(0),
     },
   ];
+
+  if (cashTotal.greaterThan(0)) {
+    lines.push({
+      accountId: cashAccount.id,
+      debit: new Decimal(0),
+      credit: cashTotal,
+    });
+  }
+  if (digitalTotal.greaterThan(0)) {
+    lines.push({
+      accountId: bankAccount.id,
+      debit: new Decimal(0),
+      credit: digitalTotal,
+    });
+  }
+  if (cashTotal.isZero() && digitalTotal.isZero()) {
+    lines.push({
+      accountId: cashAccount.id,
+      debit: new Decimal(0),
+      credit: new Decimal(sale.totalAmount.toString()),
+    });
+  }
 
   lines = balanceJournalLines(lines);
 

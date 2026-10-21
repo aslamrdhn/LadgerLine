@@ -15,6 +15,21 @@ if ("serviceWorker" in navigator) {
   });
 }
 
+// Suppress benign Firebase popup closure rejections from bubbling as uncaught errors
+window.addEventListener("unhandledrejection", (event) => {
+  const reason = event.reason;
+  if (
+    reason?.code === "auth/popup-closed-by-user" ||
+    reason?.code === "auth/cancelled-popup-request" ||
+    (typeof reason?.message === "string" &&
+      (reason.message.includes("auth/popup-closed-by-user") ||
+        reason.message.includes("auth/cancelled-popup-request")))
+  ) {
+    event.preventDefault();
+    console.info("Firebase Auth popup closed or cancelled by user.");
+  }
+});
+
 import { AppProviders } from "./providers.tsx";
 
 // --- API Interceptor for CSRF & 401 Handing ---

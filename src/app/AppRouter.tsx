@@ -191,6 +191,7 @@ export function AppRouter({
             products={products}
             rawMaterials={rawMaterials}
             financeLogs={financeLogs}
+            orders={orders}
             appConfig={appConfig || ({} as any)}
             onRefresh={onRefresh}
           />

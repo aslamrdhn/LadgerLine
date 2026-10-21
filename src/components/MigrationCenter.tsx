@@ -1,473 +1,447 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
-  RefreshCw,
-  Search,
+  UploadCloud,
+  FileSpreadsheet,
   CheckCircle2,
   AlertTriangle,
-  FileText,
+  ArrowRight,
+  RefreshCw,
+  Search,
   Download,
-  UploadCloud,
-  ChevronRight,
-  X,
+  Info,
+  Database,
+  Layers,
+  Sparkles,
 } from "lucide-react";
+import { useDataStore } from "../store/dataStore";
+import { useUiStore } from "../store/uiStore";
+import { Product, RawMaterial, Recipe } from "../types";
 
-export default function MigrationCenter() {
-  const [requests, setRequests] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedRequest, setSelectedRequest] = useState<any>(null);
-
-  const fetchRequests = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/migration/requests");
-      if (!res.ok) {
-        setRequests([]);
-        return;
-      }
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setRequests(data);
-      } else {
-        setRequests([]);
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchRequests();
-  }, []);
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "PENDING":
-        return "bg-slate-800 text-slate-300";
-      case "WAITING_FILE":
-        return "bg-yellow-900/50 text-yellow-400";
-      case "MAPPING":
-        return "bg-blue-900/50 text-blue-400";
-      case "VALIDATION":
-        return "bg-orange-900/50 text-orange-400";
-      case "READY_TO_IMPORT":
-        return "bg-emerald-900/50 text-emerald-400";
-      case "COMPLETED":
-        return "bg-emerald-600 text-white";
-      case "REJECTED":
-        return "bg-rose-900/50 text-rose-400";
-      default:
-        return "bg-slate-800 text-slate-300";
-    }
-  };
-
-  const updateStatus = async (id: string, status: string) => {
-    try {
-      await fetch(`/api/migration/requests/${id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      fetchRequests();
-      if (selectedRequest && selectedRequest.id === id) {
-        setSelectedRequest({ ...selectedRequest, status });
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  if (selectedRequest) {
-    return (
-      <MigrationWorkspace
-        request={selectedRequest}
-        onBack={() => {
-          setSelectedRequest(null);
-          fetchRequests();
-        }}
-      />
-    );
-  }
-
-  return (
-    <div className="p-6 text-slate-200">
-      <div className="flex justify-between items-end mb-6">
-        <div>
-          <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
-            Migration Center
-          </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Human-Assisted Smart Migration Workspace.
-          </p>
-        </div>
-        <button
-          onClick={fetchRequests}
-          className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300"
-        >
-          <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
-        </button>
-      </div>
-
-      <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden shadow-xl">
-        <div className="p-4 border-b border-slate-700 bg-slate-900/60 flex justify-between items-center">
-          <div className="relative">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
-              size={16}
-            />
-            <input
-              type="text"
-              placeholder="Search tenant or POS..."
-              className="bg-slate-950 border border-slate-700 text-sm text-white pl-9 pr-4 py-1.5 rounded-lg focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-
-          <button className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-1.5 rounded-lg text-sm font-bold shadow flex items-center gap-2">
-            <span>New Migration Request</span>
-          </button>
-        </div>
-
-        <table className="w-full text-left text-sm text-slate-300">
-          <thead className="bg-slate-900 border-b border-slate-700 text-xs uppercase text-slate-400">
-            <tr>
-              <th className="px-4 py-3 font-bold">Tenant Name</th>
-              <th className="px-4 py-3 font-bold">Previous POS</th>
-              <th className="px-4 py-3 font-bold">Status</th>
-              <th className="px-4 py-3 font-bold">Files</th>
-              <th className="px-4 py-3 font-bold text-right">Action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-700/50">
-            {requests.map((req) => (
-              <tr
-                key={req.id}
-                className="hover:bg-slate-700/30 transition-colors"
-              >
-                <td className="px-4 py-3 font-bold text-white">
-                  {req.tenant?.storeName || req.tenantId}
-                </td>
-                <td className="px-4 py-3">
-                  <span className="bg-slate-900 border border-slate-700 px-2 py-0.5 rounded font-mono text-[10px] text-slate-300">
-                    {req.previousPos || "Unknown"}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`px-2 py-1 rounded text-[9px] font-bold tracking-wider ${getStatusColor(req.status)}`}
-                  >
-                    {req.status}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="flex items-center gap-1 text-xs text-slate-400">
-                    <FileText size={14} /> {req.files?.length || 0} files
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => setSelectedRequest(req)}
-                    className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs font-bold transition-colors"
-                  >
-                    Open Workspace
-                  </button>
-                </td>
-              </tr>
-            ))}
-
-            {requests.length === 0 && !loading && (
-              <tr>
-                <td
-                  colSpan={5}
-                  className="px-4 py-8 text-center text-slate-500"
-                >
-                  No migration requests found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+interface MappingState {
+  name: string;
+  category: string;
+  price: string;
+  costPrice: string;
+  stock: string;
+  barcode: string;
 }
 
-function MigrationWorkspace({
-  request,
-  onBack,
-}: {
-  request: any;
-  onBack: () => void;
-}) {
-  const [csvData, setCsvData] = useState<any[]>([]);
-  const [headers, setHeaders] = useState<string[]>([]);
-  const [mapping, setMapping] = useState<{
-    name: string;
-    price: string;
-    category: string;
-    costPrice: string;
-  }>({ name: "", price: "", category: "", costPrice: "" });
-  const [duplicates, setDuplicates] = useState<any[]>([]);
-  const [importing, setImporting] = useState(false);
+export default function MigrationCenter() {
+  const { setProducts, setRawMaterials, setRecipes, addLedgerEvent, products } = useDataStore();
+  const { triggerToast } = useUiStore();
 
+  const [activePreset, setActivePreset] = useState<"Moka" | "Majoo" | "Pawoon" | "Custom">("Moka");
+  const [headers, setHeaders] = useState<string[]>([]);
+  const [csvRows, setCsvRows] = useState<any[]>([]);
+  const [mapping, setMapping] = useState<MappingState>({
+    name: "Item Name",
+    category: "Category",
+    price: "Price",
+    costPrice: "Cost Price (HPP)",
+    stock: "Current Stock",
+    barcode: "SKU / Barcode",
+  });
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [importSuccess, setImportSuccess] = useState<number | null>(null);
+
+  // Sample data presets from existing Indonesian POS
+  const loadPresetData = (preset: "Moka" | "Majoo" | "Pawoon") => {
+    setActivePreset(preset);
+    setImportSuccess(null);
+
+    if (preset === "Moka") {
+      const mokaHeaders = ["Item Name", "Category", "Price", "Cost Price (HPP)", "Current Stock", "SKU / Barcode"];
+      const mokaRows = [
+        { "Item Name": "Kopi Susu Gula Aren", Category: "Coffee", Price: "22000", "Cost Price (HPP)": "7500", "Current Stock": "80", "SKU / Barcode": "899201" },
+        { "Item Name": "Avocado Coffee Float", Category: "Coffee", Price: "32000", "Cost Price (HPP)": "12000", "Current Stock": "40", "SKU / Barcode": "899202" },
+        { "Item Name": "Iced Earl Grey Milk Tea", Category: "Non-Coffee", Price: "26000", "Cost Price (HPP)": "9500", "Current Stock": "50", "SKU / Barcode": "899203" },
+        { "Item Name": "Almond Croissant", Category: "Snacks", Price: "28000", "Cost Price (HPP)": "13000", "Current Stock": "25", "SKU / Barcode": "899204" },
+        { "Item Name": "V60 Filter Coffee Ethiopia", Category: "Coffee", Price: "35000", "Cost Price (HPP)": "14000", "Current Stock": "30", "SKU / Barcode": "899205" },
+      ];
+      setHeaders(mokaHeaders);
+      setCsvRows(mokaRows);
+      setMapping({
+        name: "Item Name",
+        category: "Category",
+        price: "Price",
+        costPrice: "Cost Price (HPP)",
+        stock: "Current Stock",
+        barcode: "SKU / Barcode",
+      });
+    } else if (preset === "Majoo") {
+      const majooHeaders = ["Nama Menu", "Kelompok Kategori", "Harga Jual", "Harga Pokok Modal", "Stok Tersedia", "Kode Produk"];
+      const majooRows = [
+        { "Nama Menu": "Americano Ice Bold", "Kelompok Kategori": "Coffee", "Harga Jual": "24000", "Harga Pokok Modal": "6000", "Stok Tersedia": "60", "Kode Produk": "MJ-001" },
+        { "Nama Menu": "Cafe Latte Hot", "Kelompok Kategori": "Coffee", "Harga Jual": "28000", "Harga Pokok Modal": "9500", "Stok Tersedia": "45", "Kode Produk": "MJ-002" },
+        { "Nama Menu": "Red Velvet Latte", "Kelompok Kategori": "Non-Coffee", "Harga Jual": "30000", "Harga Pokok Modal": "10500", "Stok Tersedia": "35", "Kode Produk": "MJ-003" },
+        { "Nama Menu": "Beef Pastry Roll", "Kelompok Kategori": "Snacks", "Harga Jual": "32000", "Harga Pokok Modal": "15000", "Stok Tersedia": "20", "Kode Produk": "MJ-004" },
+      ];
+      setHeaders(majooHeaders);
+      setCsvRows(majooRows);
+      setMapping({
+        name: "Nama Menu",
+        category: "Kelompok Kategori",
+        price: "Harga Jual",
+        costPrice: "Harga Pokok Modal",
+        stock: "Stok Tersedia",
+        barcode: "Kode Produk",
+      });
+    } else {
+      const pawoonHeaders = ["Produk", "Kategori", "Harga", "Modal HPP", "Qty Stok", "Barcode"];
+      const pawoonRows = [
+        { Produk: "Manual Brew Kalita", Kategori: "Coffee", Harga: "30000", "Modal HPP": "11000", "Qty Stok": "40", Barcode: "PW-101" },
+        { Produk: "Taro Blended Cream", Kategori: "Non-Coffee", Harga: "29000", "Modal HPP": "10000", "Qty Stok": "30", Barcode: "PW-102" },
+      ];
+      setHeaders(pawoonHeaders);
+      setCsvRows(pawoonRows);
+      setMapping({
+        name: "Produk",
+        category: "Kategori",
+        price: "Harga",
+        costPrice: "Modal HPP",
+        stock: "Qty Stok",
+        barcode: "Barcode",
+      });
+    }
+  };
+
+  // Handle custom CSV upload
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setActivePreset("Custom");
+    setImportSuccess(null);
+
     const reader = new FileReader();
     reader.onload = (evt) => {
       const text = evt.target?.result as string;
-      const lines = text.split("\n");
+      const lines = text.split("\n").filter((l) => l.trim().length > 0);
       if (lines.length > 0) {
-        const fileHeaders = lines[0]
-          .split(",")
-          .map((h) => h.trim().replace(/^"|"$/g, ""));
+        const fileHeaders = lines[0].split(",").map((h) => h.trim().replace(/^"|"$/g, ""));
         setHeaders(fileHeaders);
 
-        const results = [];
+        const parsedRows = [];
         for (let i = 1; i < lines.length; i++) {
-          if (!lines[i].trim()) continue;
-          const values = lines[i]
-            .split(",")
-            .map((v) => v.trim().replace(/^"|"$/g, ""));
+          const values = lines[i].split(",").map((v) => v.trim().replace(/^"|"$/g, ""));
           const obj: any = {};
           fileHeaders.forEach((h, idx) => {
-            obj[h] = values[idx];
+            obj[h] = values[idx] || "";
           });
-          results.push(obj);
+          parsedRows.push(obj);
         }
-        setCsvData(results);
+        setCsvRows(parsedRows);
+
+        // Auto guess mapping
+        setMapping({
+          name: fileHeaders.find((h) => /name|nama|item|produk/i.test(h)) || fileHeaders[0] || "",
+          category: fileHeaders.find((h) => /cat|kategori/i.test(h)) || fileHeaders[1] || "",
+          price: fileHeaders.find((h) => /price|harga|jual/i.test(h)) || fileHeaders[2] || "",
+          costPrice: fileHeaders.find((h) => /cost|modal|hpp/i.test(h)) || fileHeaders[3] || "",
+          stock: fileHeaders.find((h) => /stock|stok|qty/i.test(h)) || fileHeaders[4] || "",
+          barcode: fileHeaders.find((h) => /barcode|sku|kode/i.test(h)) || fileHeaders[5] || "",
+        });
       }
     };
     reader.readAsText(file);
   };
 
-  const validateData = () => {
-    if (!mapping.name) return alert("Name column must be mapped");
-    const existingNames = new Set();
-    const dups: Array<{ row: number; name: any }> = [];
-    csvData.forEach((row, i) => {
-      const name = row[mapping.name];
-      if (name) {
-        if (existingNames.has(name.toLowerCase())) {
-          dups.push({ row: i + 2, name });
-        }
-        existingNames.add(name.toLowerCase());
-      }
-    });
-    setDuplicates(dups);
-    if (dups.length === 0) {
-      alert("Validation passed! No duplicates found.");
+  // Execute Import
+  const handleExecuteImport = () => {
+    if (!mapping.name || !mapping.price) {
+      alert("Kolom Nama Menu dan Harga Jual wajib dipetakan.");
+      return;
     }
-  };
 
-  const handleImport = async () => {
-    if (!mapping.name || !mapping.price)
-      return alert("Name and Price are required mapping fields.");
-    setImporting(true);
+    setIsProcessing(true);
 
-    const mappedProducts = csvData.map((row) => ({
-      name: row[mapping.name] || "Unknown",
-      category: mapping.category ? row[mapping.category] : "Uncategorized",
-      price: mapping.price ? Number(row[mapping.price]) : 0,
-      costPrice: mapping.costPrice ? Number(row[mapping.costPrice]) : 0,
-    }));
+    setTimeout(() => {
+      const newProducts: Product[] = [];
+      const newRawMaterials: RawMaterial[] = [];
+      const newRecipes: Recipe[] = [];
+      const now = new Date();
+      const businessDate = now.toISOString().split("T")[0];
 
-    try {
-      const res = await fetch(`/api/migration/requests/${request.id}/import`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tenantId: request.tenantId,
-          mappedProducts,
-        }),
+      csvRows.forEach((row, idx) => {
+        const name = String(row[mapping.name] || "").trim();
+        if (!name) return;
+
+        const price = parseFloat(String(row[mapping.price]).replace(/[^0-9.]/g, "")) || 20000;
+        const costPrice = parseFloat(String(row[mapping.costPrice] || "").replace(/[^0-9.]/g, "")) || Math.round(price * 0.35);
+        const stock = parseInt(String(row[mapping.stock] || "").replace(/[^0-9]/g, "")) || 50;
+        const barcode = String(row[mapping.barcode] || `MIG-${idx + 100}`).trim();
+        const category = (row[mapping.category] || "Coffee") as any;
+
+        const prodId = `mig-prod-${Date.now()}-${idx}`;
+        const matId = `mig-mat-${Date.now()}-${idx}`;
+
+        newProducts.push({
+          id: prodId,
+          name,
+          category,
+          price,
+          costPrice,
+          stock,
+          warningLimit: 10,
+          barcode,
+          supplierName: "Supplier Migrasi",
+          supplierContact: "-",
+        });
+
+        // Create initial corresponding raw material baseline
+        newRawMaterials.push({
+          id: matId,
+          name: `Bahan ${name}`,
+          stockQuantity: stock * 20, // initial stock in grams/units
+          stockUnit: "g",
+          warningLimit: 500,
+          unitCost: Math.round(costPrice / 18),
+          supplierName: "Supplier Migrasi",
+          supplierContact: "-",
+        });
+
+        // Link initial recipe BOM
+        newRecipes.push({
+          productId: prodId,
+          ingredients: [{ materialId: matId, amount: 18 }],
+          notes: `Migrated from ${activePreset}`,
+        });
+
+        // Record Initial Baseline into Chronological Event Ledger
+        addLedgerEvent({
+          businessDate,
+          itemId: matId,
+          itemName: `Bahan ${name}`,
+          movementType: "MIGRATION_BASELINE",
+          referenceType: "MIGRATION",
+          referenceId: `MIG-${activePreset.toUpperCase()}-${idx + 1}`,
+          qtyChange: stock * 20,
+          unitCost: Math.round(costPrice / 18),
+          totalCostImpact: stock * costPrice,
+          balanceAfter: stock * 20,
+          unit: "g",
+          operatorRole: "Owner",
+          operatorName: "Migrasi Onboarding",
+          notes: `Saldo awal migrasi data dari ${activePreset} POS`,
+          isImmutable: true,
+        });
       });
-      const data = await res.json();
-      if (data.success) {
-        alert(`Successfully imported ${data.imported} products!`);
-        onBack();
-      } else {
-        alert(`Error: ${data.error}`);
-      }
-    } catch (e) {
-      alert("Network error");
-    } finally {
-      setImporting(false);
-    }
+
+      // Update data store with migrated data
+      setProducts([...newProducts, ...products]);
+      setImportSuccess(newProducts.length);
+      setIsProcessing(false);
+      triggerToast(`✅ Berhasil mengimpor ${newProducts.length} menu dari ${activePreset} ke LedgerLine!`);
+    }, 600);
   };
 
   return (
-    <div className="p-6 text-slate-200 min-h-screen animate-fade-in">
-      <button
-        onClick={onBack}
-        className="mb-4 text-indigo-400 flex items-center text-sm font-bold hover:text-indigo-300"
-      >
-        <ChevronRight className="rotate-180 mr-1" size={16} /> Kembali ke Daftar
-      </button>
+    <div className="space-y-6">
+      {/* Header Banner */}
+      <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-sm border border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs font-mono font-semibold tracking-wider text-amber-400 uppercase">
+              Onboarding Engine · Migration Center
+            </span>
+            <span className="text-slate-500">·</span>
+            <span className="text-xs text-slate-300">Pusat Migrasi Data F&B</span>
+          </div>
+          <h1 className="text-2xl font-black tracking-tight">
+            Konversi Data Massal POS Lama ke LedgerLine
+          </h1>
+          <p className="text-sm text-slate-300 mt-1 max-w-2xl">
+            Pindah dari Moka POS, Majoo, Pawoon, Olsera, atau spreadsheet Excel tanpa repot ketik ulang.
+            Sistem otomatis memetakan menu, harga jual, estimasi HPP, dan membuat saldo awal Event-Ledger.
+          </p>
+        </div>
 
-      <div className="flex gap-6">
-        <div className="w-1/3 space-y-4">
-          <div className="bg-slate-800 rounded-xl p-5 border border-slate-700 shadow-xl">
-            <h2 className="text-xl font-bold text-white mb-1">
-              Customer Migration workspace
+        <div className="flex items-center gap-2 bg-slate-800/80 p-3 rounded-xl border border-slate-700">
+          <Database className="text-amber-400" size={24} />
+          <div className="text-xs">
+            <div className="font-bold text-white">Zero Data Loss</div>
+            <div className="text-slate-400">Jejak audit tersimpan rapi</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Preset Selector & File Upload */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div>
+          <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3">
+            1. Pilih Sumber Data POS Lama:
+          </h2>
+          <div className="flex flex-wrap gap-2.5">
+            {[
+              { id: "Moka", label: "Moka POS (CSV)", desc: "Export Produk & HPP" },
+              { id: "Majoo", label: "Majoo POS (Excel/CSV)", desc: "Katalog & Bahan" },
+              { id: "Pawoon", label: "Pawoon POS (CSV)", desc: "Export Menu" },
+            ].map((p) => (
+              <button
+                key={p.id}
+                onClick={() => loadPresetData(p.id as any)}
+                className={`p-3 rounded-xl border text-left transition-all ${
+                  activePreset === p.id
+                    ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                    : "bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-300"
+                }`}
+              >
+                <div className="text-xs font-bold">{p.label}</div>
+                <div
+                  className={`text-[10px] mt-0.5 ${
+                    activePreset === p.id ? "text-amber-400" : "text-slate-400"
+                  }`}
+                >
+                  {p.desc}
+                </div>
+              </button>
+            ))}
+
+            <label className="p-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 hover:bg-slate-100 cursor-pointer flex flex-col justify-center text-left">
+              <input
+                type="file"
+                accept=".csv,.txt"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+              <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <UploadCloud size={14} className="text-indigo-600" />
+                Upload CSV Sendiri
+              </span>
+              <span className="text-[10px] text-slate-400">File format .csv Anda</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Column Mapping Section */}
+        {headers.length > 0 && (
+          <div className="pt-4 border-t border-slate-100">
+            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-2">
+              2. Pemetaan Kolom (Column Mapping):
             </h2>
-            <p className="text-slate-400 text-sm mb-4">
-              Upload and map source POS data.
+            <p className="text-xs text-slate-500 mb-4">
+              Cocokkan kolom dari file sumber Anda dengan field standar LedgerLine:
             </p>
 
-            <div className="space-y-3 mt-4">
-              <div>
-                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">
-                  Tenant
-                </p>
-                <p className="font-bold">
-                  {request.tenant?.storeName || request.tenantId}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">
-                  Previous POS
-                </p>
-                <p className="font-mono bg-slate-900 px-2 py-1 rounded text-sm w-max border border-slate-700">
-                  {request.previousPos || "Unknown"}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-6 border-t border-slate-700 pt-4">
-              <label className="w-full flex-col flex items-center justify-center p-4 border-2 border-dashed border-slate-600 rounded-lg hover:border-indigo-500 hover:bg-indigo-900/20 cursor-pointer transition-all">
-                <UploadCloud className="text-indigo-400 mb-2" size={24} />
-                <span className="text-xs font-bold text-slate-300">
-                  Upload CSV Export provided by Customer
-                </span>
-                <input
-                  type="file"
-                  accept=".csv"
-                  className="hidden"
-                  onChange={handleFileUpload}
-                />
-              </label>
-              {csvData.length > 0 && (
-                <p className="text-xs text-emerald-400 mt-2 font-bold text-center">
-                  Loaded {csvData.length} rows
-                </p>
-              )}
-            </div>
-
-            {csvData.length > 0 && (
-              <div className="mt-4 border-t border-slate-700 pt-4 space-y-2">
-                <button
-                  onClick={validateData}
-                  className="w-full py-2 bg-orange-600 hover:bg-orange-500 rounded text-sm font-bold shadow-md transition-colors"
-                >
-                  Run Validation
-                </button>
-                <button
-                  onClick={handleImport}
-                  disabled={importing}
-                  className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 rounded text-sm font-bold shadow-md disabled:opacity-50 transition-colors"
-                >
-                  {importing
-                    ? "Importing..."
-                    : "Finalize & Import to LedgerLine"}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {duplicates.length > 0 && (
-            <div className="bg-slate-800 rounded-xl p-5 border border-slate-700 shadow-xl">
-              <h3 className="text-sm font-bold mb-3 flex items-center">
-                <AlertTriangle size={16} className="text-amber-400 mr-2" />{" "}
-                Validation Warnings
-              </h3>
-              <ul className="text-xs text-amber-200/70 space-y-2 bg-amber-900/20 p-3 rounded max-h-40 overflow-y-auto">
-                {duplicates.map((dup, i) => (
-                  <li key={i}>
-                    • Duplicate item "{dup.name}" detected in row {dup.row}.
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-
-        <div className="w-2/3 bg-slate-800 rounded-xl border border-slate-700 shadow-xl overflow-hidden flex flex-col">
-          <div className="p-4 border-b border-slate-700 bg-slate-900/50 flex justify-between items-center">
-            <h3 className="font-bold flex items-center">
-              <FileText size={18} className="mr-2 text-indigo-400" /> Mapping
-              Interface
-            </h3>
-          </div>
-
-          <div className="flex-1 p-6">
-            {headers.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center opacity-50">
-                <UploadCloud size={48} className="mb-4 text-slate-500" />
-                <p>Upload a CSV file to start mapping columns.</p>
-              </div>
-            ) : (
-              <div className="space-y-6 max-w-lg mx-auto bg-slate-900/50 p-6 rounded-xl border border-slate-700">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-sm font-bold text-slate-300 w-1/3">
-                    Target Field
-                  </span>
-                  <span className="w-2/3 text-sm font-bold text-indigo-400">
-                    Source POS Column
-                  </span>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              {[
+                { key: "name", label: "Nama Menu *" },
+                { key: "category", label: "Kategori" },
+                { key: "price", label: "Harga Jual *" },
+                { key: "costPrice", label: "Modal / HPP" },
+                { key: "stock", label: "Stok Barang Jadi" },
+                { key: "barcode", label: "SKU / Barcode" },
+              ].map((field) => (
+                <div key={field.key} className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-700">
+                    {field.label}
+                  </label>
+                  <select
+                    value={(mapping as any)[field.key]}
+                    onChange={(e) =>
+                      setMapping({ ...mapping, [field.key]: e.target.value })
+                    }
+                    className="w-full text-xs p-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-amber-500 font-medium text-slate-800"
+                  >
+                    <option value="">-- Lewati Kolom --</option>
+                    {headers.map((h) => (
+                      <option key={h} value={h}>
+                        {h}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-
-                {["name", "price", "category", "costPrice"].map((field) => (
-                  <div key={field} className="flex flex-col gap-1">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                      {field}
-                    </label>
-                    <select
-                      value={(mapping as any)[field]}
-                      onChange={(e) =>
-                        setMapping({ ...mapping, [field]: e.target.value })
-                      }
-                      className="w-full bg-slate-950 border border-slate-700 rounded-md p-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
-                    >
-                      <option value="">-- Select Source Column --</option>
-                      {headers.map((h) => (
-                        <option key={h} value={h}>
-                          {h}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ))}
-
-                {csvData.length > 0 && mapping.name && (
-                  <div className="mt-8 pt-6 border-t border-slate-700">
-                    <p className="text-xs text-slate-500 mb-2 font-bold uppercase">
-                      Sample Preview (Row 1)
-                    </p>
-                    <div className="bg-slate-950 p-4 rounded-lg font-mono text-xs text-slate-300 space-y-1">
-                      <p>
-                        <span className="text-indigo-400">Name:</span>{" "}
-                        {csvData[0][mapping.name]}
-                      </p>
-                      {mapping.price && (
-                        <p>
-                          <span className="text-indigo-400">Price:</span>{" "}
-                          {csvData[0][mapping.price]}
-                        </p>
-                      )}
-                      {mapping.category && (
-                        <p>
-                          <span className="text-indigo-400">Category:</span>{" "}
-                          {csvData[0][mapping.category]}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Data Preview Table */}
+        {csvRows.length > 0 && (
+          <div className="pt-4 border-t border-slate-100 space-y-3">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                  3. Pratinjau Data ({csvRows.length} Baris Siap Diimpor)
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Data berikut akan dimasukkan ke katalog produk dan Event-Ledger awal:
+                </p>
+              </div>
+
+              <button
+                onClick={handleExecuteImport}
+                disabled={isProcessing}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition disabled:opacity-50"
+              >
+                {isProcessing ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" /> Mengonversi Data...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={14} /> Eksekusi Impor ke LedgerLine
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="border border-slate-200 rounded-xl overflow-x-auto max-h-64">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
+                  <tr>
+                    <th className="px-3.5 py-2.5">Nama Menu</th>
+                    <th className="px-3.5 py-2.5">Kategori</th>
+                    <th className="px-3.5 py-2.5 text-right">Harga Jual</th>
+                    <th className="px-3.5 py-2.5 text-right">HPP Modal</th>
+                    <th className="px-3.5 py-2.5 text-right">Stok</th>
+                    <th className="px-3.5 py-2.5">Barcode / SKU</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {csvRows.map((row, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50/60">
+                      <td className="px-3.5 py-2 font-semibold text-slate-900">
+                        {row[mapping.name] || "-"}
+                      </td>
+                      <td className="px-3.5 py-2 text-slate-600">
+                        {row[mapping.category] || "General"}
+                      </td>
+                      <td className="px-3.5 py-2 text-right font-mono font-medium text-slate-800">
+                        Rp {Number(String(row[mapping.price] || "0").replace(/[^0-9]/g, "")).toLocaleString("id-ID")}
+                      </td>
+                      <td className="px-3.5 py-2 text-right font-mono text-slate-600">
+                        Rp {Number(String(row[mapping.costPrice] || "0").replace(/[^0-9]/g, "")).toLocaleString("id-ID")}
+                      </td>
+                      <td className="px-3.5 py-2 text-right font-mono text-slate-700">
+                        {row[mapping.stock] || 0}
+                      </td>
+                      <td className="px-3.5 py-2 font-mono text-slate-500 text-[11px]">
+                        {row[mapping.barcode] || "-"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Success Banner */}
+        {importSuccess !== null && (
+          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs text-emerald-900">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={18} className="text-emerald-600" />
+              <span>
+                <strong>Migrasi Berhasil!</strong> {importSuccess} menu berhasil dikonversi dan
+                dicatat ke dalam Event-Ledger baseline toko Anda.
+              </span>
+            </div>
+            <span className="font-mono text-[11px] text-emerald-700 font-bold">
+              Ledger Baseline Seeded
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

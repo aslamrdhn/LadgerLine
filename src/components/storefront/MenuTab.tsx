@@ -16,6 +16,7 @@ import {
   Coffee,
 } from "lucide-react";
 import { Product, AppConfig, RawMaterial, Recipe } from "../../types";
+import { getMenuItemImage } from "../../utils/menuImages";
 
 interface MenuTabProps {
   appConfig: AppConfig;
@@ -574,22 +575,16 @@ export function MenuTab({
                         <div className="flex items-center gap-3">
                           {/* Product Thumbnail image preview */}
                           <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-50 border border-slate-200 shadow-xs flex-shrink-0 flex items-center justify-center">
-                            {p.imageUrl ? (
-                              <img
-                                src={p.imageUrl}
-                                alt={p.name}
-                                className="w-full h-full object-cover"
-                                referrerPolicy="no-referrer"
-                                onError={(e) => {
-                                  e.currentTarget.src =
-                                    "https://placehold.co/400x400/f8fafc/94a3b8?text=Produk+Tanpa+Foto";
-                                }}
-                              />
-                            ) : (
-                              <div className="text-[11px] font-black font-mono text-slate-400 text-center uppercase leading-none">
-                                {p.name.substring(0, 2)}
-                              </div>
-                            )}
+                            <img
+                              src={getMenuItemImage(p)}
+                              alt={p.name}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                e.currentTarget.src = getMenuItemImage({ name: p.name, category: p.category });
+                              }}
+                            />
                           </div>
 
                           <div className="min-w-0">

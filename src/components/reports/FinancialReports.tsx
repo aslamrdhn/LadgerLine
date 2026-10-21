@@ -5,6 +5,9 @@
 
 import React, { useState } from "react";
 import TrueCostDashboard from "../analytics/TrueCostDashboard";
+import TheoreticalVarianceView from "../analytics/TheoreticalVarianceView";
+import ChannelContributionView from "../analytics/ChannelContributionView";
+import GoogleWorkspaceArchive from "./GoogleWorkspaceArchive";
 import { FinanceLog, Product, Order } from "../../types";
 import { useUiMode } from "../../context/UiModeContext";
 import {
@@ -69,7 +72,7 @@ export default function FinancialReports({
   );
   const [restoreMessage, setRestoreMessage] = useState<string>("");
   const [activeReportTab, setActiveReportTab] = useState<
-    "pl" | "neraca" | "cashflow" | "truecost"
+    "pl" | "variance" | "channels" | "gdrive" | "neraca" | "cashflow" | "truecost"
   >("pl");
   const [showReportHelp, setShowReportHelp] = useState<boolean>(false);
 
@@ -1467,54 +1470,105 @@ export default function FinancialReports({
 
       {/* SELEKTOR PILIHAN LAPORAN UTAMA */}
       <div
-        className="flex border border-slate-200 p-1 bg-slate-50 rounded-xl gap-2 font-sans overflow-x-auto"
+        className="flex border border-slate-200 p-1 bg-slate-50 rounded-xl gap-1.5 font-sans overflow-x-auto"
         id="reporting-type-tabbar"
       >
         <button
           type="button"
           onClick={() => setActiveReportTab("pl")}
-          className={`flex-1 min-w-[150px] py-2.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+          className={`min-w-[130px] py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
             activeReportTab === "pl"
-              ? "bg-blue-600 text-white shadow-md shadow-blue-500/10"
-              : "text-slate-600 hover:bg-slate-100 hover:text-slate-800"
+              ? "bg-slate-900 text-white shadow-sm"
+              : "text-slate-600 hover:bg-slate-200 hover:text-slate-800"
           }`}
         >
-          Laba Rugi (P&L Komprehensif)
+          Laba Rugi (P&L)
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveReportTab("variance")}
+          className={`min-w-[160px] py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+            activeReportTab === "variance"
+              ? "bg-rose-600 text-white shadow-sm"
+              : "text-rose-700 bg-rose-50/70 hover:bg-rose-100"
+          }`}
+        >
+          ⭐ Theoretical vs Actual
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveReportTab("channels")}
+          className={`min-w-[160px] py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+            activeReportTab === "channels"
+              ? "bg-amber-600 text-white shadow-sm"
+              : "text-amber-800 bg-amber-50/70 hover:bg-amber-100"
+          }`}
+        >
+          ⭐ Margin Channel Ojol
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveReportTab("gdrive")}
+          className={`min-w-[150px] py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+            activeReportTab === "gdrive"
+              ? "bg-emerald-600 text-white shadow-sm"
+              : "text-emerald-800 bg-emerald-50/70 hover:bg-emerald-100"
+          }`}
+        >
+          ⭐ Google Drive Archive
         </button>
         <button
           type="button"
           onClick={() => setActiveReportTab("neraca")}
-          className={`flex-1 min-w-[215px] py-2.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+          className={`min-w-[140px] py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
             activeReportTab === "neraca"
-              ? "bg-blue-600 text-white shadow-md shadow-blue-500/10"
-              : "text-slate-600 hover:bg-slate-100 hover:text-slate-800"
+              ? "bg-slate-900 text-white shadow-sm"
+              : "text-slate-600 hover:bg-slate-200 hover:text-slate-800"
           }`}
         >
-          Neraca Buku Kas (Balance Sheet)
+          Neraca (Balance Sheet)
         </button>
         <button
           type="button"
           onClick={() => setActiveReportTab("cashflow")}
-          className={`flex-1 min-w-[150px] py-2.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+          className={`min-w-[120px] py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
             activeReportTab === "cashflow"
-              ? "bg-blue-600 text-white shadow-md shadow-blue-500/10"
-              : "text-slate-600 hover:bg-slate-100 hover:text-slate-800"
+              ? "bg-slate-900 text-white shadow-sm"
+              : "text-slate-600 hover:bg-slate-200 hover:text-slate-800"
           }`}
         >
-          Laporan Arus Kas
+          Arus Kas
         </button>
         <button
           type="button"
           onClick={() => setActiveReportTab("truecost")}
-          className={`flex-1 min-w-[150px] py-2.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+          className={`min-w-[130px] py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
             activeReportTab === "truecost"
-              ? "bg-blue-600 text-white shadow-md shadow-blue-500/10"
-              : "text-slate-600 hover:bg-slate-100 hover:text-slate-800"
+              ? "bg-slate-900 text-white shadow-sm"
+              : "text-slate-600 hover:bg-slate-200 hover:text-slate-800"
           }`}
         >
-          True Cost Engine
+          True Cost
         </button>
       </div>
+
+      {activeReportTab === "variance" && (
+        <div className="animate-fade-in">
+          <TheoreticalVarianceView />
+        </div>
+      )}
+
+      {activeReportTab === "channels" && (
+        <div className="animate-fade-in">
+          <ChannelContributionView />
+        </div>
+      )}
+
+      {activeReportTab === "gdrive" && (
+        <div className="animate-fade-in">
+          <GoogleWorkspaceArchive />
+        </div>
+      )}
 
       {activeReportTab === "pl" && (
         <div

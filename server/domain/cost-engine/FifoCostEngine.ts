@@ -24,7 +24,7 @@ export class FifoCostEngine implements ICostEngine {
         remainingQty: { gt: 0 },
         isExhausted: false,
       },
-      orderBy: { isVirtual: "asc", layerDate: "asc" },
+      orderBy: [{ isVirtual: "asc" }, { layerDate: "asc" }],
     });
 
     if (!layer) return new Decimal(0);
@@ -54,7 +54,7 @@ export class FifoCostEngine implements ICostEngine {
         remainingQty: { gt: 0 },
         isExhausted: false,
       },
-      orderBy: { isVirtual: "asc", layerDate: "asc" },
+      orderBy: [{ isVirtual: "asc" }, { layerDate: "asc" }],
     });
 
     const layerMap = new Map<string, typeof layers>();
@@ -122,7 +122,7 @@ export class FifoCostEngine implements ICostEngine {
                 remainingQty: { gt: 0 },
                 isExhausted: false,
               },
-              orderBy: { isVirtual: "asc", layerDate: "asc" },
+              orderBy: [{ isVirtual: "asc" }, { layerDate: "asc" }],
             });
 
             if (!newLayer)
@@ -523,9 +523,22 @@ export class FifoCostEngine implements ICostEngine {
       orderBy: { createdAt: "desc" },
     });
 
-    if (lastReceiving) return new Decimal(lastReceiving.unitCost.toString());
+    if (lastReceiving && Number(lastReceiving.unitCost) > 0) {
+      return new Decimal(lastReceiving.unitCost.toString());
+    }
 
-    return new Decimal(0);
+    const item = await tx.item.findUnique({
+      where: { id: itemId },
+    });
+
+    if (item && item.price && Number(item.price) > 0) {
+      return new Decimal(item.price.toString());
+    }
+
+    throw new LedgerError(
+      "COST_001",
+      `Missing cost layer: cannot determine unit cost for item ${itemId}. Zero cost is prohibited.`,
+    );
   }
 
   private async createVirtualLayer(

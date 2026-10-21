@@ -190,15 +190,19 @@ export default function MarketIntelligence({
                   <div className="flex justify-between">
                     <span className="text-slate-500">Stok Saat Ini:</span>
                     <span className="font-bold text-slate-800">
-                      {item.currentStock.toLocaleString("id-ID")} {item.unit}
+                      {(Number(item.currentStock) || 0).toLocaleString("id-ID")}{" "}
+                      {item.unit}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Rata-Rata Harian:</span>
                     <span className="font-bold text-slate-800">
-                      {item.avgDailyUsage.toLocaleString("id-ID", {
-                        maximumFractionDigits: 1,
-                      })}{" "}
+                      {(Number(item.avgDailyUsage) || 0).toLocaleString(
+                        "id-ID",
+                        {
+                          maximumFractionDigits: 1,
+                        },
+                      )}{" "}
                       {item.unit}
                     </span>
                   </div>
@@ -300,7 +304,7 @@ export default function MarketIntelligence({
                                 </p>
                                 <p className="text-xs text-slate-500">
                                   {prod.category} • Ref Harga: Rp
-                                  {prod.price_offer.toLocaleString("id-ID")}/
+                                  {(Number(prod.price_offer) || 0).toLocaleString("id-ID")}/
                                   {prod.unit}
                                 </p>
                               </div>

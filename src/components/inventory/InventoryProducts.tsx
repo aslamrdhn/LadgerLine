@@ -1,6 +1,7 @@
 import React from "react";
 import { Product } from "../../types";
 import { Edit, Trash2, Package } from "lucide-react";
+import { getMenuItemImage } from "../../utils/menuImages";
 
 interface Props {
   products: Product[];
@@ -42,21 +43,21 @@ export function InventoryProducts({
           >
             <div className="flex justify-between items-start">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center overflow-hidden">
-                  {p.imageUrl ? (
-                    <img
-                      src={p.imageUrl}
-                      alt={p.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <Package size={20} className="text-slate-400" />
-                  )}
+                <div className="w-14 h-14 bg-slate-100 rounded-xl flex items-center justify-center overflow-hidden border border-slate-200 shrink-0">
+                  <img
+                    src={getMenuItemImage(p)}
+                    alt={p.name}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                    onError={(e) => {
+                      e.currentTarget.src = getMenuItemImage({ name: p.name, category: p.category });
+                    }}
+                  />
                 </div>
                 <div>
                   <h3 className="font-bold text-slate-800">{p.name}</h3>
                   <p className="text-xs text-slate-500 font-mono">
-                    Rp {p.price.toLocaleString("id-ID")}
+                    Rp {(p.price ?? 0).toLocaleString("id-ID")}
                   </p>
                 </div>
               </div>
@@ -79,9 +80,9 @@ export function InventoryProducts({
             <div className="flex justify-between text-xs bg-slate-50 p-2 rounded-lg">
               <span className="text-slate-500">Stok:</span>
               <span
-                className={`font-bold ${p.stock <= (p.warningLimit || 0) ? "text-rose-600" : "text-slate-700"}`}
+                className={`font-bold ${(p.stock ?? 0) <= (p.warningLimit || 0) ? "text-rose-600" : "text-slate-700"}`}
               >
-                {p.stock} porsi
+                {p.stock ?? 0} porsi
               </span>
             </div>
           </div>

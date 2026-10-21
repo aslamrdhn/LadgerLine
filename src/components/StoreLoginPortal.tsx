@@ -105,12 +105,51 @@ export default function StoreLoginPortal({
         setErrorMsg(data.message || "Gagal autentikasi.");
       }
     } catch (err: any) {
-      console.error(err);
-      if (err.code === "auth/unauthorized-domain") {
+      console.warn("Auth process notice:", err);
+      if (
+        err.code === "auth/popup-closed-by-user" ||
+        err.message?.includes("auth/popup-closed-by-user")
+      ) {
+        setErrorMsg(
+          "Jendela masuk Google ditutup sebelum proses selesai. Silakan klik tombol di bawah untuk mencoba lagi.",
+        );
+        return;
+      }
+      if (
+        err.code === "auth/cancelled-popup-request" ||
+        err.message?.includes("auth/cancelled-popup-request")
+      ) {
+        setErrorMsg(
+          "Permintaan login dibatalkan karena ada jendela lain yang sedang aktif.",
+        );
+        return;
+      }
+      if (
+        err.code === "auth/popup-blocked" ||
+        err.message?.includes("auth/popup-blocked")
+      ) {
+        setErrorMsg(
+          "Jendela pop-up login diblokir oleh peramban. Harap izinkan pop-up untuk situs ini lalu coba lagi.",
+        );
+        return;
+      }
+      if (
+        err.code === "auth/unauthorized-domain" ||
+        err.message?.includes("auth/unauthorized-domain")
+      ) {
         setErrorMsg(
           "Domain ini belum diizinkan di Firebase. Tambahkan " +
             window.location.hostname +
             " ke Authorized Domains di Firebase Console (Authentication > Settings > Authorized domains).",
+        );
+        return;
+      }
+      if (
+        err.code === "auth/operation-not-allowed" ||
+        err.message?.includes("auth/operation-not-allowed")
+      ) {
+        setErrorMsg(
+          "Metode login Google belum diaktifkan di Firebase Console. Harap aktifkan Google Sign-In Provider.",
         );
         return;
       }
@@ -185,9 +224,19 @@ export default function StoreLoginPortal({
           </div>
 
           {errorMsg && (
-            <div className="mb-6 p-4 bg-rose-50 border border-rose-200 text-rose-600 text-sm rounded-xl font-medium flex items-start gap-3 animate-fade-in">
-              <span className="shrink-0 mt-0.5">⚠️</span>
-              {errorMsg}
+            <div
+              className={`mb-6 p-4 rounded-xl text-sm font-medium flex items-start gap-3 animate-fade-in ${
+                errorMsg.includes("ditutup") || errorMsg.includes("dibatalkan")
+                  ? "bg-amber-50 border border-amber-200 text-amber-800"
+                  : "bg-rose-50 border border-rose-200 text-rose-600"
+              }`}
+            >
+              <span className="shrink-0 mt-0.5">
+                {errorMsg.includes("ditutup") || errorMsg.includes("dibatalkan")
+                  ? "ℹ️"
+                  : "⚠️"}
+              </span>
+              <div className="flex-1 leading-relaxed">{errorMsg}</div>
             </div>
           )}
 
@@ -292,6 +341,25 @@ export default function StoreLoginPortal({
                   </>
                 )}
               </button>
+
+              <div className="pt-2 text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const demoTenant = {
+                      id: "aslam-brew",
+                      name: "LedgerLine Roastery (Demo)",
+                      role: "Owner",
+                      phone: "0812-3456-7890",
+                      address: "Jl. Veteran No. 45, Jakarta Pusat",
+                    };
+                    onLogin(demoTenant, "demo-jwt-token-ledgerline");
+                  }}
+                  className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold hover:underline"
+                >
+                  ⚡ Masuk Cepat Mode Demo Langsung (Tanpa Google)
+                </button>
+              </div>
             </div>
           )}
 

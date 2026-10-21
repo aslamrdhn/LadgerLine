@@ -78,7 +78,30 @@ export class AverageCostEngine implements ICostEngine {
 
       for (const alloc of allocs) {
         const key = `${alloc.itemId}|${alloc.warehouseId}`;
-        const avgCost = balanceMap.get(key) || new Decimal(0);
+        let avgCost = balanceMap.get(key);
+
+        if (!avgCost || avgCost.isZero()) {
+          const item = await transaction.item.findUnique({
+            where: { id: alloc.itemId },
+          });
+          if (item && item.price && Number(item.price) > 0) {
+            avgCost = new Decimal(item.price.toString());
+          } else {
+            const lastReceiving = await transaction.receivingDetail.findFirst({
+              where: { itemId: alloc.itemId, receiving: { tenantId } },
+              orderBy: { createdAt: "desc" },
+            });
+            if (lastReceiving && Number(lastReceiving.unitCost) > 0) {
+              avgCost = new Decimal(lastReceiving.unitCost.toString());
+            } else {
+              throw new LedgerError(
+                "COST_001",
+                `Missing cost: cannot determine average cost for item ${alloc.itemId}. Zero cost is prohibited.`,
+              );
+            }
+          }
+        }
+
         const cost = avgCost.times(alloc.quantity);
         totalCost = totalCost.plus(cost);
 
@@ -198,7 +221,8 @@ export class AverageCostEngine implements ICostEngine {
     });
 
     for (const detail of details) {
-      const snapshot = detail.recipeSnapshot as any;
+      const rawSnapshot = detail.recipeSnapshot as any;
+      const snapshot = typeof rawSnapshot === "string" ? JSON.parse(rawSnapshot) : rawSnapshot;
       if (!snapshot || !snapshot.finalItems) continue;
 
       // ============================================================

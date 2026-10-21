@@ -120,7 +120,8 @@ export const CheckoutPayloadSchema = z.object({
   useHistoricalPrices: z.boolean().default(false),
 });
 
-export type TCheckoutPayload = z.infer<typeof CheckoutPayloadSchema>;
+export type TCheckoutPayload = z.input<typeof CheckoutPayloadSchema>;
+export type TCheckoutValidated = z.output<typeof CheckoutPayloadSchema>;
 
 export interface CheckoutResult {
   sale: any;
@@ -586,7 +587,7 @@ export async function checkout(
               salesId: sale.id,
               menuId: menu.id,
               recipeVersionId: recipe?.id,
-              recipeSnapshot: snapshot || null,
+              recipeSnapshot: snapshot ? JSON.stringify(snapshot) : null,
               menuNameSnapshot: menu.name,
               unitPriceSnapshot: Number(menu.price),
               quantity: item.quantity,
@@ -684,6 +685,12 @@ export async function checkout(
             "ASSET",
             "DEBIT",
           );
+          const bankAccount = await getOrCreateAccount(
+            "BANK",
+            "Bank / Non-Tunai / QRIS",
+            "ASSET",
+            "DEBIT",
+          );
           const revenueAccount = await getOrCreateAccount(
             "PENDAPATAN",
             "Pendapatan Penjualan",
@@ -723,8 +730,20 @@ export async function checkout(
           );
           const journalNumber = `JRN-${year}-${String(journalSeq).padStart(6, "0")}`;
 
+          const cashTotal = validated.payments
+            .filter((p) => p.method === "CASH")
+            .reduce(
+              (sum, p) => sum.plus(new Decimal(p.amount)),
+              new Decimal(0),
+            );
+          const digitalTotal = validated.payments
+            .filter((p) => p.method !== "CASH")
+            .reduce(
+              (sum, p) => sum.plus(new Decimal(p.amount)),
+              new Decimal(0),
+            );
+
           let lines = [
-            { accountId: cashAccount.id, debit: total, credit: new Decimal(0) },
             {
               accountId: revenueAccount.id,
               debit: new Decimal(0),
@@ -751,6 +770,21 @@ export async function checkout(
               credit: serviceCharge,
             },
           ];
+
+          if (cashTotal.greaterThan(0)) {
+            lines.push({
+              accountId: cashAccount.id,
+              debit: cashTotal,
+              credit: new Decimal(0),
+            });
+          }
+          if (digitalTotal.greaterThan(0)) {
+            lines.push({
+              accountId: bankAccount.id,
+              debit: digitalTotal,
+              credit: new Decimal(0),
+            });
+          }
 
           lines = balanceJournalLines(lines);
 
@@ -936,14 +970,14 @@ export async function checkout(
               where: { key: validated.idempotencyKey },
               update: {
                 statusCode: 200,
-                responseBody: JSON.stringify({ id: sale.id, invoiceNumber }),
+                responseBody: JSON.stringify({ sale, kitchenOrder }),
                 expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
               },
               create: {
                 key: validated.idempotencyKey,
                 tenantId: validated.tenantId,
                 statusCode: 200,
-                responseBody: JSON.stringify({ id: sale.id, invoiceNumber }),
+                responseBody: JSON.stringify({ sale, kitchenOrder }),
                 expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
               },
             });

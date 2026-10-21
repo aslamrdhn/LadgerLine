@@ -202,3 +202,109 @@ export interface Supplier {
   notes?: string;
   createdAt: string;
 }
+
+// ============================================================
+// LEDGER-FIRST CORE TYPES (PRD FOUNDATION)
+// ============================================================
+
+export type InventoryMovementType =
+  | "RECEIVING"
+  | "POS_SALE"
+  | "OPNAME_ADJUSTMENT"
+  | "WASTE"
+  | "TRANSFER"
+  | "RETURN_SUPPLIER"
+  | "MIGRATION_BASELINE";
+
+export interface InventoryLedgerEvent {
+  id: string;
+  sequenceNumber: number;
+  businessDate: string;
+  timestamp: string;
+  itemId: string;
+  itemName: string;
+  movementType: InventoryMovementType;
+  referenceType: "PO" | "INVOICE" | "OPNAME" | "WASTE_TICKET" | "MIGRATION" | "CLOSING";
+  referenceId: string;
+  qtyChange: number; // + for inflow, - for outflow
+  unitCost: number; // Average cost snapshot at the time of event
+  totalCostImpact: number; // qtyChange * unitCost
+  balanceAfter: number; // Stock balance after event
+  unit: string;
+  operatorRole: "Kasir" | "Barista" | "Manager" | "Owner";
+  operatorName: string;
+  notes?: string;
+  isImmutable: boolean;
+  channel?: "Dine-In" | "Takeaway" | "GoFood" | "GrabFood" | "ShopeeFood";
+}
+
+export interface TheoreticalVarianceRecord {
+  materialId: string;
+  materialName: string;
+  unit: string;
+  beginningStock: number;
+  receivedQty: number;
+  theoreticalUsage: number; // Calculated: Sum of (POS Sales × Recipe BOM)
+  expectedEndingStock: number; // beginningStock + receivedQty - theoreticalUsage
+  actualPhysicalCount: number; // From Stock Opname
+  varianceQty: number; // actualPhysicalCount - expectedEndingStock (negative = loss/leak)
+  unitCost: number; // Current Average Cost
+  varianceRupiah: number; // varianceQty * unitCost (unexplained waste dirupiahkan)
+  severity: "NORMAL" | "WARNING" | "CRITICAL";
+  rootCauseDiagnostic: string;
+  lastOpnameDate: string;
+}
+
+export type SalesChannel = "Dine-In" | "Takeaway" | "GoFood" | "GrabFood" | "ShopeeFood";
+
+export interface ChannelContributionMetric {
+  channel: SalesChannel;
+  orderCount: number;
+  grossRevenue: number;
+  platformFeeRate: number; // e.g. 0.0 for Dine-in, 0.20 for GoFood/GrabFood
+  platformFeeAmount: number;
+  packagingCostPerOrder: number; // e.g. 0 for Dine-in, 1200 for Takeaway, 2000 for Ojol
+  totalPackagingCost: number;
+  cogsAmount: number; // Recipe BOM raw material HPP
+  contributionProfit: number; // grossRevenue - platformFeeAmount - totalPackagingCost - cogsAmount
+  contributionMarginPercent: number; // (contributionProfit / grossRevenue) * 100
+  avgTicketSize: number;
+}
+
+export interface DeterministicClosingRecord {
+  id: string;
+  closingDate: string;
+  closedAt: string;
+  closedBy: string;
+  closedByRole: string;
+  drawerCashExpected: number;
+  drawerCashCounted: number;
+  cashDiscrepancy: number; // counted - expected
+  qrisTotal: number;
+  debitTotal: number;
+  ojolTotal: number;
+  totalRevenue: number;
+  totalHpp: number;
+  grossProfit: number;
+  totalPackagingCost: number;
+  totalPlatformFees: number;
+  contributionProfit: number;
+  unexplainedVarianceRupiah: number;
+  netTrueProfit: number;
+  status: "CONFIRMED_SEALED";
+  auditHash: string;
+  googleDriveArchived: boolean;
+  notes?: string;
+}
+
+export interface AuthorityRule {
+  role: "Kasir" | "Barista" | "Manager" | "Owner";
+  title: string;
+  maxPoApprovalAmount: number; // in IDR
+  canVoidTransactions: boolean;
+  canConfirmStockOpname: boolean;
+  canExecuteClosing: boolean;
+  canViewProfitTruth: boolean;
+  canManageMasterData: boolean;
+  description: string;
+}

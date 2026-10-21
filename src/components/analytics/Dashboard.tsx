@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { Product, RawMaterial, FinanceLog, AppConfig } from "../../types";
+import { Product, RawMaterial, FinanceLog, AppConfig, Order } from "../../types";
 import {
   TrendingUp,
   TrendingDown,
@@ -30,6 +30,7 @@ interface DashboardProps {
   products: Product[];
   rawMaterials: RawMaterial[];
   financeLogs: FinanceLog[];
+  orders?: Order[];
   appConfig: any;
   onRefresh: () => void;
   onNavigate?: (
@@ -43,6 +44,11 @@ interface DashboardProps {
       | "intelligence",
   ) => void;
 }
+
+const formatRupiah = (val: any): string => {
+  const num = Number(val);
+  return isNaN(num) ? "0" : num.toLocaleString("id-ID");
+};
 
 function SystemClock() {
   const [time, setTime] = React.useState<string>("");
@@ -75,6 +81,7 @@ export default function Dashboard({
   products,
   rawMaterials,
   financeLogs,
+  orders = [],
   appConfig,
   onRefresh,
   onNavigate,
@@ -130,35 +137,52 @@ Kami ingin memesan kembali bahan baku tersebut di atas. Mohon infokan penawaran 
     }
   };
 
-  // Hitung total pemasukan & pengeluaran dari history log keuangan - DIOPTIMALKAN DENGAN MEMOISASI
+  // Hitung total pemasukan: gabungan pesanan POS + catatan log keuangan
   const totalIncome = React.useMemo(() => {
-    return financeLogs
-      .filter((log) => log.type === "income")
-      .reduce((sum, log) => sum + log.amount, 0);
-  }, [financeLogs]);
+    const fromLogs = (financeLogs || [])
+      .filter((log) => log && log.type === "income")
+      .reduce((sum, log) => sum + (Number(log?.amount) || 0), 0);
+    const fromOrders = (orders || [])
+      .filter((o) => o.paymentStatus === "Success")
+      .reduce((sum, o) => sum + (Number(o?.totalPrice) || 0), 0);
+    return fromLogs + fromOrders;
+  }, [financeLogs, orders]);
 
   const totalExpense = React.useMemo(() => {
-    return financeLogs
-      .filter((log) => log.type === "expense")
-      .reduce((sum, log) => sum + log.amount, 0);
+    return (financeLogs || [])
+      .filter((log) => log && log.type === "expense")
+      .reduce((sum, log) => sum + (Number(log?.amount) || 0), 0);
   }, [financeLogs]);
 
   const netProfit = React.useMemo(
-    () => totalIncome - totalExpense,
+    () => (Number(totalIncome) || 0) - (Number(totalExpense) || 0),
     [totalIncome, totalExpense],
   );
   const marginPercentage = React.useMemo(
-    () => (totalIncome > 0 ? Math.round((netProfit / totalIncome) * 100) : 0),
+    () =>
+      totalIncome > 0
+        ? Math.round(((Number(netProfit) || 0) / totalIncome) * 100)
+        : 0,
     [totalIncome, netProfit],
   );
 
   // Deteksi bahan baku kritis & produk kritis - DIOPTIMALKAN DENGAN MEMOISASI
   const lowMaterialsAll = React.useMemo(
-    () => rawMaterials.filter((m) => m.stockQuantity <= m.warningLimit),
+    () =>
+      (rawMaterials || []).filter((m) => {
+        const qty = Number(m.stockQuantity ?? (m as any).stock ?? 0);
+        const limit = Number(m.warningLimit ?? (m as any).minStock ?? 0);
+        return qty <= limit;
+      }),
     [rawMaterials],
   );
   const lowProductsAll = React.useMemo(
-    () => products.filter((p) => p.stock <= p.warningLimit),
+    () =>
+      (products || []).filter((p) => {
+        const stock = Number(p.stock ?? (p as any).stockQuantity ?? 0);
+        const limit = Number(p.warningLimit ?? (p as any).minStock ?? 0);
+        return stock <= limit;
+      }),
     [products],
   );
   const lowMaterials = React.useMemo(
@@ -204,35 +228,76 @@ Kami ingin memesan kembali bahan baku tersebut di atas. Mohon infokan penawaran 
 
   return (
     <div className="space-y-6" id="dashboard-tab">
-      {/* Header Dashboard */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-100 shadow-xs">
-        <div>
-          <h1
-            className="text-2xl font-bold text-slate-900 tracking-tight"
-            id="db-title"
-          >
-            Dashboard Utama
-          </h1>
-          <p className="text-slate-500 text-sm mt-1">
-            Pantau ringkasan performa finansial dan stok kafe Anda secara
-            real-time.
-          </p>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="text-right hidden sm:block">
-            <p className="text-xs text-slate-400 uppercase font-mono tracking-wider font-semibold">
-              WAKTU SISTEM
+      {/* Header Dashboard & Core Architecture Banner */}
+      <div className="bg-slate-900 text-white p-6 rounded-3xl shadow-sm border border-slate-800 space-y-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs font-mono font-bold tracking-wider text-amber-400 uppercase">
+                Product Vision & Positioning
+              </span>
+              <span className="text-slate-600">·</span>
+              <span className="text-xs text-slate-300">Multi-Outlet Coffee & Resto OS</span>
+            </div>
+            <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
+              LedgerLine by Aslam
+            </h1>
+            <p className="text-xs text-slate-300 mt-0.5 font-medium">
+              Know Where Your Profit Really Goes · From Counter to Ledger
             </p>
-            <SystemClock />
           </div>
-          <button
-            id="refresh-state-btn"
-            onClick={onRefresh}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-105 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-xl transition-all shadow-2xs"
-          >
-            <RefreshCw size={16} />
-            Muat Ulang Data
-          </button>
+
+          <div className="flex items-center gap-3">
+            <div className="text-right hidden sm:block">
+              <p className="text-[10px] text-slate-400 uppercase font-mono tracking-wider font-semibold">
+                WAKTU SISTEM
+              </p>
+              <div className="text-amber-400 font-mono text-xs font-bold">
+                <SystemClock />
+              </div>
+            </div>
+            <button
+              id="refresh-state-btn"
+              onClick={onRefresh}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition border border-slate-700"
+            >
+              <RefreshCw size={14} />
+              Segarkan Data
+            </button>
+          </div>
+        </div>
+
+        {/* The Three Engines Core Architecture Pipeline */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t border-slate-800/80">
+          <div className="bg-slate-800/60 p-3.5 rounded-2xl border border-slate-700/60">
+            <div className="text-[10px] font-mono font-bold text-blue-400 uppercase tracking-wider mb-1">
+              1. TRANSACTION ENGINE
+            </div>
+            <div className="text-xs font-bold text-white">Input Layer Lapangan</div>
+            <p className="text-[11px] text-slate-400 mt-1 leading-snug">
+              Menangkap interaksi kasir POS, order meja QR, penerimaan barang (receiving), dan beban harian.
+            </p>
+          </div>
+
+          <div className="bg-slate-800/60 p-3.5 rounded-2xl border border-slate-700/60">
+            <div className="text-[10px] font-mono font-bold text-amber-400 uppercase tracking-wider mb-1">
+              2. LEDGER ENGINE (Source of Truth)
+            </div>
+            <div className="text-xs font-bold text-white">Event-Ledger Kronologis</div>
+            <p className="text-[11px] text-slate-400 mt-1 leading-snug">
+              Tidak menyimpan saldo statis. Setiap gram biji kopi & rupiah dicatat berurutan secara permanen dengan Average Costing.
+            </p>
+          </div>
+
+          <div className="bg-slate-800/60 p-3.5 rounded-2xl border border-slate-700/60">
+            <div className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider mb-1">
+              3. PROFIT ENGINE
+            </div>
+            <div className="text-xs font-bold text-white">Analytical Layer (Kebenaran Laba)</div>
+            <p className="text-[11px] text-slate-400 mt-1 leading-snug">
+              Theoretical vs Actual Variance (kebocoran dirupiahkan) dan Kontribusi Margin per Channel (Dine-in vs Ojol).
+            </p>
+          </div>
         </div>
       </div>
 
@@ -249,7 +314,7 @@ Kami ingin memesan kembali bahan baku tersebut di atas. Mohon infokan penawaran 
                 Total Pemasukan
               </p>
               <h3 className="text-2xl font-bold font-mono text-emerald-950 mt-2">
-                Rp {totalIncome.toLocaleString("id-ID")}
+                Rp {formatRupiah(totalIncome)}
               </h3>
             </div>
             <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-600">
@@ -272,7 +337,7 @@ Kami ingin memesan kembali bahan baku tersebut di atas. Mohon infokan penawaran 
                 Total Pengeluaran
               </p>
               <h3 className="text-2xl font-bold font-mono text-rose-950 mt-2">
-                Rp {totalExpense.toLocaleString("id-ID")}
+                Rp {formatRupiah(totalExpense)}
               </h3>
             </div>
             <div className="p-3 bg-rose-500/10 rounded-xl text-rose-600">
@@ -295,7 +360,7 @@ Kami ingin memesan kembali bahan baku tersebut di atas. Mohon infokan penawaran 
                 Laba Bersih
               </p>
               <h3 className="text-2xl font-bold font-mono text-sky-950 mt-2">
-                Rp {netProfit.toLocaleString("id-ID")}
+                Rp {formatRupiah(netProfit)}
               </h3>
             </div>
             <div className="p-3 bg-sky-500/10 rounded-xl text-sky-700">
@@ -380,9 +445,12 @@ Kami ingin memesan kembali bahan baku tersebut di atas. Mohon infokan penawaran 
                     <p className="text-xs text-slate-500 mt-1">
                       Sisa:{" "}
                       <strong className="text-rose-600 font-mono">
-                        {mat.stockQuantity} {mat.stockUnit}
+                        {formatRupiah(mat.stockQuantity ?? (mat as any).stock)}{" "}
+                        {mat.stockUnit || (mat as any).unit || "pcs"}
                       </strong>{" "}
-                      (Minimum: {mat.warningLimit} {mat.stockUnit})
+                      (Minimum:{" "}
+                      {formatRupiah(mat.warningLimit ?? (mat as any).minStock)}{" "}
+                      {mat.stockUnit || (mat as any).unit || "pcs"})
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -391,7 +459,7 @@ Kami ingin memesan kembali bahan baku tersebut di atas. Mohon infokan penawaran 
                         SUPPLIER
                       </p>
                       <p className="font-semibold text-slate-700">
-                        {mat.supplierName}
+                        {mat.supplierName || "-"}
                       </p>
                     </div>
                     <button
@@ -400,10 +468,10 @@ Kami ingin memesan kembali bahan baku tersebut di atas. Mohon infokan penawaran 
                         handleCopyPODraft(
                           mat.id,
                           mat.name,
-                          mat.warningLimit,
-                          mat.stockQuantity,
-                          mat.stockUnit,
-                          mat.supplierName,
+                          mat.warningLimit ?? 0,
+                          mat.stockQuantity ?? 0,
+                          mat.stockUnit || "pcs",
+                          mat.supplierName || "-",
                         )
                       }
                       className={`px-3 py-2 text-xs font-bold font-sans rounded-lg transition-all cursor-pointer border ${
@@ -417,7 +485,7 @@ Kami ingin memesan kembali bahan baku tersebut di atas. Mohon infokan penawaran 
                         : "Salin Draft PO"}
                     </button>
                     <a
-                      href={`https://wa.me/${(mat.supplierContact || "").replace(/[^0-9]/g, "")}?text=Halo%20${encodeURIComponent(mat.supplierName)},%20kami%20ingin%20memesan%20kembali%20${encodeURIComponent(mat.name)}%20untuk%20${encodeURIComponent(appConfig?.storeName || "Kedai")}`}
+                      href={`https://wa.me/${(mat.supplierContact || "").replace(/[^0-9]/g, "")}?text=Halo%20${encodeURIComponent(mat.supplierName || "Supplier")},%20kami%20ingin%20memesan%20kembali%20${encodeURIComponent(mat.name)}%20untuk%20${encodeURIComponent(appConfig?.storeName || "Kedai")}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center gap-1.5 px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white font-medium text-xs rounded-lg transition-all font-sans font-semibold"
@@ -445,9 +513,11 @@ Kami ingin memesan kembali bahan baku tersebut di atas. Mohon infokan penawaran 
                     <p className="text-xs text-slate-500 mt-1">
                       Sisa:{" "}
                       <strong className="text-rose-600 font-mono">
-                        {prod.stock} Porsi
+                        {formatRupiah(prod.stock ?? (prod as any).stockQuantity)}{" "}
+                        Porsi
                       </strong>{" "}
-                      (Minimum: {prod.warningLimit})
+                      (Minimum:{" "}
+                      {formatRupiah(prod.warningLimit ?? (prod as any).minStock)})
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -743,10 +813,12 @@ Kami ingin memesan kembali bahan baku tersebut di atas. Mohon infokan penawaran 
                   );
                 }
 
-                return filtered.map((p) => {
-                  const profitVal = p.price - p.costPrice;
+                return (filtered || []).map((p) => {
+                  const costPrice = Number(p.costPrice ?? (p as any).cogs ?? 0);
+                  const price = Number(p.price ?? 0);
+                  const profitVal = price - costPrice;
                   const marginPct =
-                    p.price > 0 ? Math.round((profitVal / p.price) * 100) : 0;
+                    price > 0 ? Math.round((profitVal / price) * 100) : 0;
 
                   let tierLabel = "Steady";
                   let tierColor = "bg-blue-50 text-blue-700 border-blue-100";
@@ -762,8 +834,8 @@ Kami ingin memesan kembali bahan baku tersebut di atas. Mohon infokan penawaran 
                     tierLabel = "Margin Rendah";
                     tierColor = "bg-rose-50 text-rose-700 border-rose-100";
                     const idealPrice =
-                      Math.ceil((p.costPrice * 2) / 1000) * 1000;
-                    recText = `Saran: Naikkan harga ke Rp ${idealPrice.toLocaleString("id-ID")} untuk mencapai ideal margin 50%!`;
+                      Math.ceil((costPrice * 2) / 1000) * 1000;
+                    recText = `Saran: Naikkan harga ke Rp ${formatRupiah(idealPrice)} untuk mencapai ideal margin 50%!`;
                   }
 
                   return (
@@ -781,13 +853,13 @@ Kami ingin memesan kembali bahan baku tersebut di atas. Mohon infokan penawaran 
                       </td>
                       <td className="p-3 text-slate-500">{p.category}</td>
                       <td className="p-3 text-right font-mono text-slate-600">
-                        Rp {p.costPrice.toLocaleString("id-ID")}
+                        Rp {formatRupiah(costPrice)}
                       </td>
                       <td className="p-3 text-right font-mono font-bold text-slate-800">
-                        Rp {p.price.toLocaleString("id-ID")}
+                        Rp {formatRupiah(price)}
                       </td>
                       <td className="p-3 text-right font-mono font-bold text-slate-800">
-                        Rp {profitVal.toLocaleString("id-ID")}
+                        Rp {formatRupiah(profitVal)}
                       </td>
                       <td className="p-3 text-right">
                         <span
@@ -863,7 +935,7 @@ Kami ingin memesan kembali bahan baku tersebut di atas. Mohon infokan penawaran 
                   subtitle: "Gross Profit Inflow",
                   color: "text-emerald-500 bg-emerald-50/50 border-emerald-100",
                   icon: TrendingUp,
-                  metric: `Rp ${totalIncome.toLocaleString("id-ID")}`,
+                  metric: `Rp ${formatRupiah(totalIncome)}`,
                 },
                 {
                   id: "expense",
@@ -871,7 +943,7 @@ Kami ingin memesan kembali bahan baku tersebut di atas. Mohon infokan penawaran 
                   subtitle: "Operating Expense",
                   color: "text-rose-500 bg-rose-50/50 border-rose-100",
                   icon: TrendingDown,
-                  metric: `Rp ${totalExpense.toLocaleString("id-ID")}`,
+                  metric: `Rp ${formatRupiah(totalExpense)}`,
                 },
                 {
                   id: "net_profit",
@@ -879,7 +951,7 @@ Kami ingin memesan kembali bahan baku tersebut di atas. Mohon infokan penawaran 
                   subtitle: "True Net Earnings",
                   color: "text-sky-600 bg-sky-50/50 border-sky-100",
                   icon: DollarSign,
-                  metric: `Rp ${netProfit.toLocaleString("id-ID")}`,
+                  metric: `Rp ${formatRupiah(netProfit)}`,
                 },
                 {
                   id: "profit_margin",
@@ -1016,7 +1088,7 @@ Kami ingin memesan kembali bahan baku tersebut di atas. Mohon infokan penawaran 
                         </span>
                       </div>
                       <strong className="text-sm font-mono font-black text-emerald-600">
-                        Rp {totalIncome.toLocaleString("id-ID")}
+                        Rp {formatRupiah(totalIncome)}
                       </strong>
                     </div>
                   </div>
@@ -1047,7 +1119,7 @@ Kami ingin memesan kembali bahan baku tersebut di atas. Mohon infokan penawaran 
                         </span>
                       </div>
                       <strong className="text-sm font-mono font-black text-rose-600">
-                        Rp {totalExpense.toLocaleString("id-ID")}
+                        Rp {formatRupiah(totalExpense)}
                       </strong>
                     </div>
                   </div>
@@ -1080,9 +1152,9 @@ Kami ingin memesan kembali bahan baku tersebut di atas. Mohon infokan penawaran 
                         Laba Bersih = Pemasukan - Pengeluaran
                       </p>
                       <p className="font-extrabold text-white tracking-wider border-t border-slate-850 pt-2 flex flex-wrap gap-1 leading-none mt-1">
-                        <span>Rp {totalIncome.toLocaleString("id-ID")}</span>
+                        <span>Rp {formatRupiah(totalIncome)}</span>
                         <span className="text-rose-450">-</span>
-                        <span>Rp {totalExpense.toLocaleString("id-ID")}</span>
+                        <span>Rp {formatRupiah(totalExpense)}</span>
                         <span className="text-blue-400">=</span>
                         <span
                           className={
@@ -1091,7 +1163,7 @@ Kami ingin memesan kembali bahan baku tersebut di atas. Mohon infokan penawaran 
                               : "text-rose-400 font-black"
                           }
                         >
-                          Rp {netProfit.toLocaleString("id-ID")}
+                          Rp {formatRupiah(netProfit)}
                         </span>
                       </p>
                     </div>
@@ -1120,9 +1192,9 @@ Kami ingin memesan kembali bahan baku tersebut di atas. Mohon infokan penawaran 
                         Profit Margin = (Laba Bersih / Total Pemasukan) × 100%
                       </p>
                       <p className="font-extrabold text-white tracking-wider border-t border-slate-850 pt-2 flex flex-wrap gap-1 leading-none mt-1">
-                        <span>(Rp {netProfit.toLocaleString("id-ID")}</span>
+                        <span>(Rp {formatRupiah(netProfit)}</span>
                         <span className="text-slate-500">/</span>
-                        <span>Rp {totalIncome.toLocaleString("id-ID")})</span>
+                        <span>Rp {formatRupiah(totalIncome)})</span>
                         <span className="text-indigo-400">× 100%</span>
                         <span className="text-blue-450">=</span>
                         <span className="text-indigo-400 font-black">

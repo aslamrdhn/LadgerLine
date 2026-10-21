@@ -13,7 +13,7 @@
     "start": "npm run setup && npx prisma db push --accept-data-loss || true && NODE_ENV=production node dist/server.cjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "echo 'No tests specified' && exit 0"
+    "test": "NODE_ENV=test tsx --test server/tests/**/*.test.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",

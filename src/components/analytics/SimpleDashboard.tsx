@@ -90,7 +90,7 @@ export default function SimpleDashboard({
               <h3 className="font-bold">Total Penjualan</h3>
             </div>
             <p className="text-3xl font-black text-emerald-900">
-              Rp {todaysSales.toLocaleString("id-ID")}
+              Rp {(Number(todaysSales) || 0).toLocaleString("id-ID")}
             </p>
             <p className="text-xs text-emerald-600 mt-2 font-medium bg-emerald-100 w-max px-2 py-1 rounded">
               Dari {todaysOrders.length} transaksi
@@ -165,7 +165,7 @@ export default function SimpleDashboard({
                   </div>
                   <div className="text-right">
                     <p className="font-bold text-emerald-600">
-                      Rp {order.totalPrice.toLocaleString("id-ID")}
+                      Rp {(Number(order.totalPrice) || 0).toLocaleString("id-ID")}
                     </p>
                     <p className="text-xs text-slate-400">
                       {order.items?.length || 0} item

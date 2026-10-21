@@ -9,6 +9,7 @@ import {
   Tag,
 } from "lucide-react";
 import { Product } from "../../types";
+import { getMenuItemImage } from "../../utils/menuImages";
 
 interface ProductCatalogProps {
   activeTableData: any;
@@ -237,20 +238,16 @@ export function ProductCatalog({
                   <div className="flex items-center gap-3 p-2.5 w-full">
                     {/* Left image or icon */}
                     <div className="w-12 h-12 bg-slate-50 flex-shrink-0 rounded-lg overflow-hidden border border-slate-100 flex items-center justify-center">
-                      {p.imageUrl ? (
-                        <img
-                          src={p.imageUrl}
-                          alt={p.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          referrerPolicy="no-referrer"
-                          onError={(e) => {
-                            e.currentTarget.src =
-                              "https://placehold.co/400x400/f8fafc/94a3b8?text=Produk+Tanpa+Foto";
-                          }}
-                        />
-                      ) : (
-                        <ShoppingBag size={18} className="text-slate-300" />
-                      )}
+                      <img
+                        src={getMenuItemImage(p)}
+                        alt={p.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        referrerPolicy="no-referrer"
+                        loading="lazy"
+                        onError={(e) => {
+                          e.currentTarget.src = getMenuItemImage({ name: p.name, category: p.category });
+                        }}
+                      />
                     </div>
                     {/* Middle details */}
                     <div className="flex-1 min-w-0 text-left">
@@ -327,26 +324,19 @@ export function ProductCatalog({
                   // DEFAULT GRID CARD VIEW
                   <>
                     {/* Product Thumbnail Image */}
-                    {p.imageUrl ? (
-                      <div className="relative h-28 w-full overflow-hidden bg-slate-50 border-b border-slate-100">
-                        <img
-                          src={p.imageUrl}
-                          alt={p.name}
-                          referrerPolicy="no-referrer"
-                          loading="lazy"
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
-                          onError={(e) => {
-                            e.currentTarget.src =
-                              "https://placehold.co/400x400/f8fafc/94a3b8?text=Produk+Tanpa+Foto";
-                          }}
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 via-transparent to-transparent opacity-60" />
-                      </div>
-                    ) : (
-                      <div className="h-28 bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center border-b border-slate-100">
-                        <ShoppingBag size={24} className="text-slate-300" />
-                      </div>
-                    )}
+                    <div className="relative h-28 w-full overflow-hidden bg-slate-50 border-b border-slate-100">
+                      <img
+                        src={getMenuItemImage(p)}
+                        alt={p.name}
+                        referrerPolicy="no-referrer"
+                        loading="lazy"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+                        onError={(e) => {
+                          e.currentTarget.src = getMenuItemImage({ name: p.name, category: p.category });
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 via-transparent to-transparent opacity-60" />
+                    </div>
 
                     <div className="p-3 space-y-2 flex-1 flex flex-col justify-between">
                       <div>

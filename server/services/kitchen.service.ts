@@ -122,8 +122,10 @@ export async function updateKitchenOrderStatus(
 export async function updateKitchenOrderQuantity(
   salesId: string,
   refundedItems: Array<{ menuName: string; quantity: number }>,
+  tx?: PrismaTransaction,
 ) {
-  const order = await prisma.kitchenOrder.findUnique({
+  const db = tx || prisma;
+  const order = await db.kitchenOrder.findUnique({
     where: { salesId },
   });
 
@@ -141,7 +143,7 @@ export async function updateKitchenOrderQuantity(
     }
   }
 
-  const updated = await prisma.kitchenOrder.update({
+  const updated = await db.kitchenOrder.update({
     where: { id: order.id },
     data: {
       items: JSON.stringify(items),

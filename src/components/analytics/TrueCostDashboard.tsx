@@ -8,6 +8,11 @@ import {
   AlertTriangle,
 } from "lucide-react";
 
+const safeFormat = (val: any) => {
+  const num = Math.round(Number(val) || 0);
+  return isNaN(num) ? "0" : num.toLocaleString("id-ID");
+};
+
 export default function TrueCostDashboard({
   products,
   tenantId,
@@ -97,7 +102,7 @@ export default function TrueCostDashboard({
                       Selling Price:
                     </span>
                     <span className="font-black text-slate-800">
-                      Rp {data.sellingPrice.toLocaleString()}
+                      Rp {safeFormat(data.sellingPrice)}
                     </span>
                   </div>
 
@@ -108,7 +113,7 @@ export default function TrueCostDashboard({
                         Material Cost:
                       </span>
                       <span className="font-bold text-rose-600 font-mono">
-                        - Rp {Math.round(data.materialCost).toLocaleString()}
+                        - Rp {safeFormat(data.materialCost)}
                       </span>
                     </div>
                     {data.materialBreakdown &&
@@ -124,7 +129,7 @@ export default function TrueCostDashboard({
                                   {item.name}
                                 </span>
                                 <span className="text-slate-400 font-mono">
-                                  Rp {Math.round(item.amount).toLocaleString()}
+                                  Rp {safeFormat(item.amount)}
                                 </span>
                               </div>
                             ),
@@ -140,7 +145,7 @@ export default function TrueCostDashboard({
                         Overhead Allocation:
                       </span>
                       <span className="font-bold text-rose-600 font-mono">
-                        - Rp {Math.round(data.operationalCost).toLocaleString()}
+                        - Rp {safeFormat(data.operationalCost)}
                       </span>
                     </div>
                     {data.operationalBreakdown &&
@@ -156,7 +161,7 @@ export default function TrueCostDashboard({
                                 {item.category}
                               </span>
                               <span className="text-slate-400 font-mono">
-                                Rp {Math.round(item.amount).toLocaleString()}
+                                Rp {safeFormat(item.amount)}
                               </span>
                             </div>
                           ),
@@ -175,7 +180,7 @@ export default function TrueCostDashboard({
                         Tax Alloc:
                       </span>
                       <span className="font-bold text-amber-600 font-mono">
-                        - Rp {Math.round(data.tax).toLocaleString()}
+                        - Rp {safeFormat(data.tax)}
                       </span>
                     </div>
                   )}
@@ -187,7 +192,7 @@ export default function TrueCostDashboard({
                       Total True Cost
                     </span>
                     <span className="text-sm font-black text-slate-900 font-mono">
-                      Rp {Math.round(data.totalTrueCost).toLocaleString()}
+                      Rp {safeFormat(data.totalTrueCost)}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
@@ -195,7 +200,7 @@ export default function TrueCostDashboard({
                       Real Profit
                     </span>
                     <span className="text-sm font-black text-emerald-600 font-mono">
-                      Rp {Math.round(data.realProfit).toLocaleString()}
+                      Rp {safeFormat(data.realProfit)}
                     </span>
                   </div>
                 </div>

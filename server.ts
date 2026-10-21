@@ -11,6 +11,8 @@ import fastifyCors from "@fastify/cors";
 import fastifyHelmet from "@fastify/helmet";
 import fastifyStatic from "@fastify/static";
 import { prisma } from "./server/lib/prisma.ts";
+import { ssotRoutes } from "./server/routes/ssot.routes.ts";
+import { kitchenRoutes } from "./server/routes/kitchen.routes.ts";
 import { authRoutes } from "./server/routes/auth.routes.ts";
 import { posRoutes } from "./server/routes/pos.routes.ts";
 import { offlineRoutes } from "./server/routes/offline.routes.ts";
@@ -39,53 +41,33 @@ export async function createApp() {
     fastify.log.error(error);
     reply.status(500).send({
       success: false,
+      error: error.code || "INTERNAL_ERROR",
       message: error.message || "Internal Server Error",
       stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
     });
   });
 
-  await fastify.register(fastifyHelmet, { contentSecurityPolicy: false, crossOriginEmbedderPolicy: false, crossOriginOpenerPolicy: false, crossOriginResourcePolicy: false, frameguard: false });
-
-  const allowedOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(",")
-    : ["http://localhost:5173", "http://localhost:3000"];
+  await fastify.register(fastifyHelmet, {
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: false,
+    crossOriginResourcePolicy: false,
+    frameguard: false,
+  });
 
   await fastify.register(fastifyCors, {
-    origin: (origin, cb) => {
-      if (!origin || allowedOrigins.includes(origin) || allowedOrigins.some(o => new RegExp(o.replace('*', '.*')).test(origin))) {
-        cb(null, true);
-        return;
-      }
-      cb(null, true);
-    },
+    origin: true,
     credentials: true,
   });
 
+  // Register SSOT Root API routes directly
+  await fastify.register(ssotRoutes);
+  await fastify.register(kitchenRoutes, { prefix: "/kitchen" });
+
+  // Register existing API scope
   fastify.register(async (api) => {
-    api.get("/health", async (request: FastifyRequest, reply: FastifyReply) => {
-      try {
-        await prisma.$queryRaw`SELECT 1`;
-        return { status: "healthy", database: "connected" };
-      } catch (error) {
-        reply.status(500);
-        return { status: "error", message: "Database connection failed" };
-      }
-    });
-
-    api.get("/config", async () => {
-      try {
-        const fs = require("fs");
-        const path = require("path");
-        const configPath = path.join(process.cwd(), "firebase-applet-config.json");
-        if (fs.existsSync(configPath)) {
-          return JSON.parse(fs.readFileSync(configPath, "utf8"));
-        }
-        return {};
-      } catch (e) {
-        return {};
-      }
-    });
-
+    api.register(ssotRoutes);
+    api.register(kitchenRoutes, { prefix: "/kitchen" });
     api.register(authRoutes, { prefix: "/auth" });
     api.register(supplierRoutes, { prefix: "/supplier" });
     api.register(publicRoutes, { prefix: "/orders/public" });
@@ -99,6 +81,17 @@ export async function createApp() {
     api.register(migrationRoutes, { prefix: "/migration" });
   }, { prefix: "/api" });
 
+  const isApiRoute = (url: string) =>
+    url.startsWith("/api") ||
+    url.startsWith("/auth") ||
+    url.startsWith("/sales") ||
+    url.startsWith("/kitchen") ||
+    url.startsWith("/sse") ||
+    url.startsWith("/reports") ||
+    url.startsWith("/subscription") ||
+    url.startsWith("/offline") ||
+    url === "/health";
+
   if (process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "test") {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
@@ -107,7 +100,7 @@ export async function createApp() {
     });
 
     fastify.addHook("onRequest", (request: FastifyRequest, reply: FastifyReply, done) => {
-      if (request.url.startsWith("/api")) {
+      if (isApiRoute(request.url)) {
         return done();
       }
       vite.middlewares(request.raw, reply.raw, done);
@@ -120,8 +113,8 @@ export async function createApp() {
     });
 
     fastify.setNotFoundHandler((request: FastifyRequest, reply: FastifyReply) => {
-      if (request.raw.url && request.raw.url.startsWith("/api/")) {
-        reply.code(404).send({ success: false, message: `Route ${request.method}:${request.raw.url} not found` });
+      if (request.raw.url && isApiRoute(request.raw.url)) {
+        reply.code(404).send({ error: "NOT_FOUND", message: `Route ${request.method}:${request.raw.url} not found` });
       } else {
         reply.sendFile("index.html");
       }

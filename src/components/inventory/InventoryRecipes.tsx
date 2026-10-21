@@ -35,7 +35,7 @@ export function InventoryRecipes({ products, rawMaterials, recipes }: Props) {
                 <div>
                   <h3 className="font-bold text-slate-800">{p.name}</h3>
                   <p className="text-xs text-slate-500 font-mono">
-                    Rp {p.price.toLocaleString("id-ID")}
+                    Rp {(p.price ?? 0).toLocaleString("id-ID")}
                   </p>
                 </div>
               </div>

@@ -85,7 +85,9 @@ export async function processRefund(input: TRefundPayload) {
       const totalDetailHpp = new Decimal(
         detail.hpp ? detail.hpp.toString() : 0,
       );
-      const unitHpp = totalDetailHpp.dividedBy(detail.quantity);
+      const unitHpp = detail.quantity > 0
+        ? totalDetailHpp.dividedBy(detail.quantity)
+        : new Decimal(0);
       const hppRefund = roundMoney(unitHpp.times(item.quantity));
       refundHpp = refundHpp.plus(hppRefund);
 
@@ -141,7 +143,7 @@ export async function processRefund(input: TRefundPayload) {
       .plus(roundedRefundTax)
       .plus(roundedRefundService);
 
-    const returnOrder = await tx.returnOrder.create({
+    let returnOrder = await tx.returnOrder.create({
       data: {
         tenantId: validated.tenantId,
         originalSalesId: validated.salesId,
@@ -166,20 +168,22 @@ export async function processRefund(input: TRefundPayload) {
         );
       }
 
+      const rawSnapshot = rd.detail.recipeSnapshot as any;
+      const snapshot = typeof rawSnapshot === "string" ? JSON.parse(rawSnapshot) : rawSnapshot;
+      const targetItemId = snapshot?.finalItems?.[0]?.itemId ||
+        (await tx.item.findFirst({ where: { tenantId: validated.tenantId } }))?.id;
+
       await tx.returnDetail.create({
         data: {
           returnOrderId: returnOrder.id,
           salesDetailId: rd.detail.id,
-          itemId: rd.detail.menuId,
+          itemId: targetItemId,
           quantity: rd.quantity,
           refundAmount: refundAmountProRata.toNumber(),
           hppRefund: rd.hppRefund.toNumber(),
           menuNameSnapshot: rd.detail.menuNameSnapshot,
         },
       });
-
-      // Rollback raw ingredients stock via Cost Engine
-      const snapshot = rd.detail.recipeSnapshot as any;
       const warehouseId =
         originalSale.warehouseId || originalSale.outlet?.defaultWarehouseId;
 
@@ -201,7 +205,7 @@ export async function processRefund(input: TRefundPayload) {
       }
     }
 
-    await tx.returnOrder.update({
+    returnOrder = await tx.returnOrder.update({
       where: { id: returnOrder.id },
       data: { status: "COMPLETED", completedAt: new Date() },
     });
@@ -235,6 +239,12 @@ export async function processRefund(input: TRefundPayload) {
     const cashAccount = await getOrCreateAccount(
       "KAS",
       "Kas",
+      "ASSET",
+      "DEBIT",
+    );
+    const bankAccount = await getOrCreateAccount(
+      "BANK",
+      "Bank / Non-Tunai / QRIS",
       "ASSET",
       "DEBIT",
     );
@@ -295,7 +305,14 @@ export async function processRefund(input: TRefundPayload) {
         debit: refundHpp,
         credit: new Decimal(0),
       },
-      { accountId: cashAccount.id, debit: new Decimal(0), credit: refundTotal },
+      {
+        accountId:
+          validated.refundMethod === "CASH"
+            ? cashAccount.id
+            : bankAccount.id,
+        debit: new Decimal(0),
+        credit: refundTotal,
+      },
     ];
 
     lines = balanceJournalLines(lines);
@@ -331,7 +348,7 @@ export async function processRefund(input: TRefundPayload) {
         };
       }),
     );
-    await updateKitchenOrderQuantity(validated.salesId, kitchenRefundItems);
+    await updateKitchenOrderQuantity(validated.salesId, kitchenRefundItems, tx);
 
     await tx.auditLog.create({
       data: {

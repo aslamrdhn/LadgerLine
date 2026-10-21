@@ -1742,11 +1742,25 @@ ${checkoutResult.order.items
                 a.download = `LedgerLine-Struk-${checkoutResult.order.id}.txt`;
                 a.click();
               }}
-              className="px-4 py-2 bg-slate-150 hover:bg-slate-200 text-slate-700 border border-slate-250 font-semibold text-xs rounded-xl transition-all"
+              className="px-4 py-2 bg-slate-150 hover:bg-slate-200 text-slate-700 border border-slate-250 font-semibold text-xs rounded-xl transition-all cursor-pointer"
             >
               Unduh File Struk (.txt)
             </button>
           </div>
+
+          {/* SELESAI & TRANSAKSI BARU ACTION BUTTON */}
+          <button
+            type="button"
+            id="new-transaction-btn"
+            onClick={() => {
+              setCheckoutResult(null);
+              setQrisPaidStatus("pending");
+            }}
+            className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs uppercase tracking-wider rounded-2xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-98"
+          >
+            <CheckCircle2 size={16} className="text-emerald-400" />
+            <span>✓ Selesai & Siap Transaksi Baru</span>
+          </button>
         </div>
       )}
     </>

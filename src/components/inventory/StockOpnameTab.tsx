@@ -64,18 +64,20 @@ export function StockOpnameTab({ materials }: { materials: RawMaterial[] }) {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {materials.map((m) => {
+              const currentStock = Number(m.stockQuantity ?? (m as any).stock ?? 0);
+              const unit = m.stockUnit || (m as any).unit || "pcs";
               const actual =
                 opnameData[m.id] !== undefined
                   ? opnameData[m.id]
-                  : m.stockQuantity;
-              const diff = actual - m.stockQuantity;
+                  : currentStock;
+              const diff = actual - currentStock;
               return (
                 <tr key={m.id} className="hover:bg-slate-50/50">
                   <td className="px-4 py-3 font-semibold text-slate-800">
                     {m.name}
                   </td>
                   <td className="px-4 py-3 font-mono text-slate-600">
-                    {m.stockQuantity} {m.stockUnit}
+                    {currentStock} {unit}
                   </td>
                   <td className="px-4 py-3">
                     <input
@@ -84,7 +86,7 @@ export function StockOpnameTab({ materials }: { materials: RawMaterial[] }) {
                       value={
                         opnameData[m.id] !== undefined ? opnameData[m.id] : ""
                       }
-                      placeholder={m.stockQuantity.toString()}
+                      placeholder={currentStock.toString()}
                       onChange={(e) =>
                         setOpnameData({
                           ...opnameData,
@@ -97,7 +99,7 @@ export function StockOpnameTab({ materials }: { materials: RawMaterial[] }) {
                     className={`px-4 py-3 font-mono font-bold ${diff < 0 ? "text-rose-600" : diff > 0 ? "text-emerald-600" : "text-slate-400"}`}
                   >
                     {diff > 0 ? "+" : ""}
-                    {diff} {m.stockUnit}
+                    {diff} {unit}
                   </td>
                   <td className="px-4 py-3">
                     <button className="text-xs font-bold text-indigo-600 flex items-center gap-1 hover:underline">
