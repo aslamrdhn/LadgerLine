@@ -169,8 +169,7 @@ export const financeRoutes: FastifyPluginAsync = async (
     },
   );
 
-  // GET /api/finance/true-hpp
-  fastify.get("/true-hpp", async (request, reply) => {
+  const handleTrueHpp = async (request: any, reply: any) => {
     try {
       const ctx = await resolveTenantContext(request.user?.tenantId);
       const dateStr = (request.query as any)?.date;
@@ -199,10 +198,13 @@ export const financeRoutes: FastifyPluginAsync = async (
         message: error.message,
       });
     }
-  });
+  };
 
-  // GET /api/finance/profit-loss
-  fastify.get("/profit-loss", async (request, reply) => {
+  // GET /api/finance/true-hpp and /api/finance/reports/hpp-summary
+  fastify.get("/true-hpp", handleTrueHpp);
+  fastify.get("/reports/hpp-summary", handleTrueHpp);
+
+  const handleProfitLoss = async (request: any, reply: any) => {
     try {
       const ctx = await resolveTenantContext(request.user?.tenantId);
       const query = request.query as any;
@@ -210,7 +212,10 @@ export const financeRoutes: FastifyPluginAsync = async (
       const startDate = query.startDate
         ? new Date(query.startDate)
         : new Date(new Date().setDate(1));
+      startDate.setHours(0, 0, 0, 0);
+
       const endDate = query.endDate ? new Date(query.endDate) : new Date();
+      endDate.setHours(23, 59, 59, 999);
 
       const result = await financeService.getProfitAndLoss(
         ctx.tenantId,
@@ -220,7 +225,10 @@ export const financeRoutes: FastifyPluginAsync = async (
 
       return reply.code(200).send({
         success: true,
-        data: result,
+        data: {
+          ...result,
+          revenue: result.totalRevenue,
+        },
       });
     } catch (error: any) {
       return reply.code(500).send({
@@ -229,7 +237,11 @@ export const financeRoutes: FastifyPluginAsync = async (
         message: error.message,
       });
     }
-  });
+  };
+
+  // GET /api/finance/profit-loss and /api/finance/reports/pnl
+  fastify.get("/profit-loss", handleProfitLoss);
+  fastify.get("/reports/pnl", handleProfitLoss);
 
   // POST /api/finance/daily-closing
   fastify.post("/daily-closing", async (request, reply) => {

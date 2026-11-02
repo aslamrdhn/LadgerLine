@@ -255,4 +255,50 @@ export const syncRoutes: FastifyPluginAsync = async (
       });
     }
   });
+
+  fastify.get("/history", async (request, reply) => {
+    try {
+      const query = (request.query as any) || {};
+      const ctx = await resolveTenantContext(request.user?.tenantId);
+      const page = Math.max(1, Number(query.page) || 1);
+      const limit = Math.min(250, Math.max(1, Number(query.limit) || 50));
+      const skip = (page - 1) * limit;
+
+      const [totalCount, sales] = await Promise.all([
+        prisma.salesHeader.count({ where: { tenantId: ctx.tenantId } }),
+        prisma.salesHeader.findMany({
+          where: { tenantId: ctx.tenantId },
+          include: { details: true, payments: true },
+          orderBy: { createdAt: "desc" },
+          skip,
+          take: limit,
+        }),
+      ]);
+
+      const orders = sales.map((s) => ({
+        id: s.id,
+        invoiceNumber: s.invoiceNumber,
+        orderTime: s.createdAt.toISOString(),
+        subtotal: s.subtotal,
+        tax: s.tax,
+        totalPrice: s.totalAmount,
+        status: s.status,
+      }));
+
+      return reply.code(200).send({
+        success: true,
+        page,
+        limit,
+        totalCount,
+        totalPages: Math.max(1, Math.ceil(totalCount / limit)),
+        orders,
+      });
+    } catch (error: any) {
+      return reply.code(500).send({
+        success: false,
+        error: "SYS_001",
+        message: error.message,
+      });
+    }
+  });
 };

@@ -3,6 +3,31 @@ import { prisma } from "../lib/prisma.ts";
 import { broadcastKitchenEvent } from "./ssot.routes.ts";
 
 export const kitchenRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
+  fastify.get("/orders", async () => {
+    const ordersInDb = await prisma.kitchenOrder.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+    const orders = ordersInDb.map((o) => {
+      let items = [];
+      try {
+        items = JSON.parse(o.items as string);
+      } catch {
+        items = [];
+      }
+      return {
+        id: o.id,
+        salesId: o.salesId,
+        outletId: o.outletId,
+        orderNumber: o.orderNumber,
+        status: o.status,
+        items,
+        createdAt: o.createdAt,
+      };
+    });
+    return { success: true, orders, data: orders };
+  });
+
   fastify.patch("/orders/:id/status", async (request, reply) => {
     const { id } = request.params as { id: string };
     const { status } = (request.body as any) || {};

@@ -4,6 +4,44 @@ import { resolveTenantContext } from "../services/tenantContext.service.ts";
 import { sanitizeNumber, sanitizeString } from "../utils/sanitizer.ts";
 import { getTenantHint } from "./catalog.routes.ts";
 import { mapSuppliersForFrontend } from "./procurement.routes.ts";
+import { authenticateToken } from "../middlewares/auth.ts";
+
+async function verifyAdminAccess(request: FastifyRequest, reply: FastifyReply) {
+  const authHeader = request.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return reply.code(401).send({
+      success: false,
+      error: "AUT_001",
+      message: "Otorisasi SuperAdmin diperlukan",
+    });
+  }
+  const token = authHeader.replace("Bearer ", "").trim();
+  if (!token || token === "null" || token === "undefined") {
+    return reply.code(401).send({
+      success: false,
+      error: "AUT_001",
+      message: "Token SuperAdmin tidak valid",
+    });
+  }
+
+  await authenticateToken(request, reply);
+  if (reply.sent) return;
+
+  const role = String(request.user?.role || "").toUpperCase();
+  if (
+    role &&
+    role !== "OWNER" &&
+    role !== "SUPER_ADMIN" &&
+    role !== "SUPERADMIN" &&
+    role !== "ADMIN"
+  ) {
+    return reply.code(403).send({
+      success: false,
+      error: "AUT_003",
+      message: "Akses ditolak: Hanya SuperAdmin / Owner yang diizinkan",
+    });
+  }
+}
 
 export async function superadminRoutes(fastify: FastifyInstance) {
   // 1. Auth & Session
@@ -40,7 +78,7 @@ export async function superadminRoutes(fastify: FastifyInstance) {
     };
   });
 
-  fastify.post("/config", async (request: FastifyRequest) => {
+  const handleUpdateConfig = async (request: FastifyRequest) => {
     const body = (request.body as any) || {};
     const ctx = await resolveTenantContext(getTenantHint(request));
     const tenant = await prisma.tenant.findUnique({
@@ -64,27 +102,166 @@ export async function superadminRoutes(fastify: FastifyInstance) {
       },
     });
 
-    return { success: true, config: nextConfig };
+    if (typeof body.taxPercentage === "number") {
+      const existingRate = await prisma.taxRate.findFirst({
+        where: { tenantId: ctx.tenantId, status: "ACTIVE" },
+      });
+      if (existingRate) {
+        await prisma.taxRate.update({
+          where: { id: existingRate.id },
+          data: { rate: body.taxPercentage / 100 },
+        });
+      }
+    }
+
+    if (
+      body.monthlyFixedOverhead !== undefined ||
+      body.monthlyLaborCost !== undefined
+    ) {
+      await prisma.costAllocationConfig.upsert({
+        where: { tenantId: ctx.tenantId },
+        update: {
+          ...(body.monthlyFixedOverhead !== undefined
+            ? { monthlyOperationalExpense: Number(body.monthlyFixedOverhead) }
+            : {}),
+          ...(body.monthlyLaborCost !== undefined
+            ? { monthlyLaborExpense: Number(body.monthlyLaborCost) }
+            : {}),
+        },
+        create: {
+          tenantId: ctx.tenantId,
+          monthlyOperationalExpense: Number(body.monthlyFixedOverhead ?? 4500000),
+          monthlyLaborExpense: Number(body.monthlyLaborCost ?? 6000000),
+        },
+      });
+    }
+
+    return { success: true, config: nextConfig, settings: nextConfig };
+  };
+
+  fastify.post("/config", handleUpdateConfig);
+  fastify.put("/config", handleUpdateConfig);
+  fastify.post("/settings", handleUpdateConfig);
+  fastify.put("/settings", handleUpdateConfig);
+
+  fastify.post("/attendance", async (request: FastifyRequest) => {
+    const body = (request.body as any) || {};
+    const ctx = await resolveTenantContext(getTenantHint(request), body.outletId);
+    const userId = request.user?.userId || body.employeeName || "cashier-01";
+    const att = await prisma.attendanceLog.create({
+      data: {
+        userId,
+        tenantId: ctx.tenantId,
+        outletId: ctx.outletId,
+        checkIn: new Date(),
+      },
+    });
+    return { success: true, data: att };
   });
 
-  // 3. Customer Loyalty & Points
+  fastify.post("/finance-logs", async (request: FastifyRequest) => {
+    const body = (request.body as any) || {};
+    const ctx = await resolveTenantContext(
+      request.user?.tenantId || body.tenantId || getTenantHint(request),
+    );
+    const type = String(body.type || "EXPENSE").toUpperCase();
+    const amount = sanitizeNumber(body.amount, { min: 0, fallback: 0 });
+    const category = sanitizeString(body.category || "Operasional", 100);
+    const description = sanitizeString(
+      body.description || body.note || category,
+      255,
+    );
+    const accounts = await prisma.account.findMany({
+      where: { tenantId: ctx.tenantId },
+    });
+    const accMap = new Map(accounts.map((a) => [a.code, a.id]));
+    const kasId = accMap.get("KAS") || accounts[0]?.id;
+    const counterId =
+      type === "INCOME"
+        ? accMap.get("PENDAPATAN") || kasId
+        : accMap.get("BEBAN_OPS") || kasId;
+
+    const journal = await prisma.journalEntry.create({
+      data: {
+        tenantId: ctx.tenantId,
+        entryNumber: `JRN-MAN-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        entryDate: new Date(),
+        referenceType: type === "INCOME" ? "MANUAL_INCOME" : "MANUAL_EXPENSE",
+        referenceId: `fin-${Date.now()}`,
+        description: `[${category}] ${description}`,
+        status: "POSTED",
+        lines:
+          kasId && counterId
+            ? {
+                create:
+                  type === "INCOME"
+                    ? [
+                        { accountId: kasId, debit: amount, credit: 0 },
+                        { accountId: counterId, debit: 0, credit: amount },
+                      ]
+                    : [
+                        { accountId: counterId, debit: amount, credit: 0 },
+                        { accountId: kasId, debit: 0, credit: amount },
+                      ],
+              }
+            : undefined,
+      },
+    });
+    return { success: true, data: journal };
+  });
+
+  // 3. Customer Loyalty & Points (Real DB Calculation from SalesHeader)
   fastify.get(
     "/customer/:phone/points",
     async (request: FastifyRequest<{ Params: { phone: string } }>) => {
       const { phone } = request.params;
-      const cleanPhone = sanitizeString(phone, 30);
+      const cleanPhone = sanitizeString(phone, 30).replace(/[^0-9+]/g, "");
+      const ctx = await resolveTenantContext(getTenantHint(request));
+
+      const matchingSales = await prisma.salesHeader.findMany({
+        where: {
+          tenantId: ctx.tenantId,
+          status: "POSTED",
+          OR: [
+            { note: { contains: cleanPhone } },
+            { metadata: { contains: cleanPhone } },
+          ],
+        },
+        select: { totalAmount: true, metadata: true, note: true },
+      });
+
+      const totalSpent = matchingSales.reduce(
+        (sum, s) => sum + Number(s.totalAmount || 0),
+        0,
+      );
+      // 1 point per Rp 1.000 spent (with minimum 50 welcome points for registered phone)
+      const earnedPoints = Math.floor(totalSpent / 1000);
+      const points = Math.max(50, earnedPoints);
+      const tier =
+        points >= 500
+          ? "Platinum"
+          : points >= 200
+            ? "Gold"
+            : points >= 100
+              ? "Silver"
+              : "Member";
+      const eligibleDiscount =
+        points >= 500 ? 25000 : points >= 200 ? 10000 : points >= 100 ? 5000 : 0;
+
       return {
         success: true,
         phone: cleanPhone,
-        customerName: "Pelanggan Prioritas",
-        points: 250,
-        tier: "Gold",
-        eligibleDiscount: 10000,
+        customerName: `Member ${cleanPhone.slice(-4)}`,
+        points,
+        totalOrders: matchingSales.length,
+        totalSpent,
+        tier,
+        eligibleDiscount,
         customer: {
-          name: "Pelanggan Prioritas",
+          name: `Member ${cleanPhone.slice(-4)}`,
           phone: cleanPhone,
-          points: 250,
-          tier: "Gold",
+          points,
+          tier,
         },
       };
     },
@@ -114,50 +291,60 @@ export async function superadminRoutes(fastify: FastifyInstance) {
     };
   });
 
-  // 5. Admin Portal Endpoints
-  fastify.get("/admin/overview", async () => {
-    const [totalTenants, activeTenants, totalSuppliers] = await Promise.all([
-      prisma.tenant.count(),
-      prisma.tenant.count({ where: { status: "active" } }),
-      prisma.supplier.count(),
-    ]);
-    return {
-      success: true,
-      data: {
-        totalTenants,
-        activeTenants,
-        totalSuppliers,
-      },
-    };
-  });
+  // 5. Admin Portal Endpoints (Protected by verifyAdminAccess)
+  fastify.get(
+    "/admin/overview",
+    { preHandler: verifyAdminAccess },
+    async () => {
+      const [totalTenants, activeTenants, totalSuppliers] = await Promise.all([
+        prisma.tenant.count(),
+        prisma.tenant.count({ where: { status: "active" } }),
+        prisma.supplier.count(),
+      ]);
+      return {
+        success: true,
+        data: {
+          totalTenants,
+          activeTenants,
+          totalSuppliers,
+        },
+      };
+    },
+  );
 
-  fastify.get("/admin/audit-logs", async () => {
-    const logs = await prisma.auditLog.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 100,
-    });
-    return {
-      success: true,
-      data: logs.map((l) => ({
-        id: l.id,
-        action: l.action,
-        entityType: l.resourceType || "System",
-        entityId: l.resourceId || "-",
-        actorId: l.userId || "system",
-        createdAt: l.createdAt.toISOString(),
-        details: l.metadata || l.newData || "",
-      })),
-    };
-  });
+  fastify.get(
+    "/admin/audit-logs",
+    { preHandler: verifyAdminAccess },
+    async () => {
+      const logs = await prisma.auditLog.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 100,
+      });
+      return {
+        success: true,
+        data: logs.map((l) => ({
+          id: l.id,
+          action: l.action,
+          entityType: l.resourceType || "System",
+          entityId: l.resourceId || "-",
+          actorId: l.userId || "system",
+          createdAt: l.createdAt.toISOString(),
+          details: l.metadata || l.newData || "",
+        })),
+      };
+    },
+  );
 
-  fastify.get("/admin/suppliers", async () => {
-    return mapSuppliersForFrontend();
-  });
+  fastify.get(
+    "/admin/suppliers",
+    { preHandler: verifyAdminAccess },
+    async () => {
+      return mapSuppliersForFrontend();
+    },
+  );
 
-  const updateSupplierStatusHandler = async (
-    request: FastifyRequest<{ Params: { id: string } }>,
-  ) => {
-    const { id } = request.params;
+  const updateSupplierStatusHandler = async (request: FastifyRequest) => {
+    const { id } = request.params as { id: string };
     const body = (request.body as any) || {};
     const nextStatus = sanitizeString(
       body.status || body.verification_status || "VERIFIED",
@@ -169,7 +356,7 @@ export async function superadminRoutes(fastify: FastifyInstance) {
       data: {
         status: nextStatus,
         verifiedAt: nextStatus === "verified" ? new Date() : undefined,
-        verifiedBy: "admin",
+        verifiedBy: request.user?.userId || "admin",
       },
     });
 
@@ -178,44 +365,61 @@ export async function superadminRoutes(fastify: FastifyInstance) {
         action: `SUPPLIER_${nextStatus.toUpperCase()}`,
         resourceType: "Supplier",
         resourceId: id,
-        userId: "admin",
+        userId: request.user?.userId || "admin",
       },
     });
 
     return { success: true, data: updated };
   };
 
-  fastify.post("/admin/suppliers/:id/status", updateSupplierStatusHandler);
-  fastify.patch("/admin/suppliers/:id", updateSupplierStatusHandler);
-  fastify.post("/admin/suppliers/:id", updateSupplierStatusHandler);
+  fastify.post(
+    "/admin/suppliers/:id/status",
+    { preHandler: verifyAdminAccess },
+    updateSupplierStatusHandler,
+  );
+  fastify.patch(
+    "/admin/suppliers/:id",
+    { preHandler: verifyAdminAccess },
+    updateSupplierStatusHandler,
+  );
+  fastify.post(
+    "/admin/suppliers/:id",
+    { preHandler: verifyAdminAccess },
+    updateSupplierStatusHandler,
+  );
 
-  fastify.get("/admin/products/pending", async () => {
-    const items = await prisma.supplierCatalog.findMany({
-      include: { supplier: true },
-      orderBy: { createdAt: "desc" },
-    });
-    return items.map((c) => ({
-      id: c.id,
-      product_name: c.name,
-      productName: c.name,
-      category: c.category,
-      price_offer: c.price,
-      priceOffer: c.price,
-      unit: c.unit,
-      stock: c.stockQuantity,
-      status: c.isActive ? "APPROVED" : "PENDING",
-      supplier: {
-        id: c.supplier.id,
-        company_name: c.supplier.name,
-        companyName: c.supplier.name,
-      },
-    }));
-  });
+  fastify.get(
+    "/admin/products/pending",
+    { preHandler: verifyAdminAccess },
+    async () => {
+      const items = await prisma.supplierCatalog.findMany({
+        include: { supplier: true },
+        orderBy: { createdAt: "desc" },
+      });
+      return items.map((c) => ({
+        id: c.id,
+        product_name: c.name,
+        productName: c.name,
+        category: c.category,
+        price_offer: c.price,
+        priceOffer: c.price,
+        unit: c.unit,
+        stock: c.stockQuantity,
+        status: c.isActive ? "APPROVED" : "PENDING",
+        supplier: {
+          id: c.supplier.id,
+          company_name: c.supplier.name,
+          companyName: c.supplier.name,
+        },
+      }));
+    },
+  );
 
   fastify.post(
     "/admin/products/:id/status",
-    async (request: FastifyRequest<{ Params: { id: string } }>) => {
-      const { id } = request.params;
+    { preHandler: verifyAdminAccess },
+    async (request: FastifyRequest) => {
+      const { id } = request.params as { id: string };
       const body = (request.body as any) || {};
       const status = String(body.status || "APPROVED").toUpperCase();
       await prisma.supplierCatalog.update({
@@ -226,35 +430,36 @@ export async function superadminRoutes(fastify: FastifyInstance) {
     },
   );
 
-  fastify.get("/admin/migration-tickets", async () => {
-    try {
-      const tickets = await prisma.migrationJob.findMany({
-        include: { tenant: true },
-        orderBy: { createdAt: "desc" },
-      });
-      return tickets.map((t) => ({
-        id: t.id,
-        tenantId: t.tenantId,
-        tenantName: t.tenant?.name || "Store",
-        storeName: t.tenant?.name || "Store",
-        fileName: t.fileUrl || "data_export.csv",
-        notes: t.validationErrors || "",
-        status: (t.status || "PENDING").toUpperCase(),
-        createdAt: t.createdAt.toISOString(),
-      }));
-    } catch {
-      return [];
-    }
-  });
+  fastify.get(
+    "/admin/migration-tickets",
+    { preHandler: verifyAdminAccess },
+    async () => {
+      try {
+        const tickets = await prisma.migrationJob.findMany({
+          include: { tenant: true },
+          orderBy: { createdAt: "desc" },
+        });
+        return tickets.map((t) => ({
+          id: t.id,
+          tenantId: t.tenantId,
+          tenantName: t.tenant?.name || "Store",
+          storeName: t.tenant?.name || "Store",
+          fileName: t.fileUrl || "data_export.csv",
+          notes: t.validationErrors || "",
+          status: (t.status || "PENDING").toUpperCase(),
+          createdAt: t.createdAt.toISOString(),
+        }));
+      } catch {
+        return [];
+      }
+    },
+  );
 
   const updateAdminTicketStatus = async (
-    request: FastifyRequest<{
-      Params: { id: string };
-      Body: { status: string };
-    }>,
+    request: FastifyRequest,
     reply: FastifyReply,
   ) => {
-    const { id } = request.params;
+    const { id } = request.params as { id: string };
     const { status } = (request.body as any) || {};
     try {
       await prisma.migrationJob.update({
@@ -267,8 +472,16 @@ export async function superadminRoutes(fastify: FastifyInstance) {
     }
   };
 
-  fastify.post("/admin/migration-tickets/:id", updateAdminTicketStatus);
-  fastify.patch("/admin/migration-tickets/:id", updateAdminTicketStatus);
+  fastify.post(
+    "/admin/migration-tickets/:id",
+    { preHandler: verifyAdminAccess },
+    updateAdminTicketStatus,
+  );
+  fastify.patch(
+    "/admin/migration-tickets/:id",
+    { preHandler: verifyAdminAccess },
+    updateAdminTicketStatus,
+  );
 
   fastify.post(
     "/tenant/migration-tickets",
@@ -298,40 +511,51 @@ export async function superadminRoutes(fastify: FastifyInstance) {
     },
   );
 
-  fastify.get("/admin/tenants", async () => {
-    try {
-      const tenants = await prisma.tenant.findMany({
-        orderBy: { createdAt: "desc" },
-      });
-      return tenants.map((t) => ({
-        id: t.id,
-        name: t.name,
-        slug: t.slug,
-        plan: t.plan.toUpperCase(),
-        subscriptionPlan: t.plan.toUpperCase(),
-        status: t.status,
-        isActive: t.status === "active",
-        subscriptionExpiresAt: t.planExpiresAt
-          ? t.planExpiresAt.toISOString()
-          : new Date(Date.now() + 30 * 86400000).toISOString(),
-        createdAt: t.createdAt.toISOString(),
-      }));
-    } catch {
-      return [];
-    }
-  });
+  fastify.get(
+    "/admin/tenants",
+    { preHandler: verifyAdminAccess },
+    async () => {
+      try {
+        const tenants = await prisma.tenant.findMany({
+          orderBy: { createdAt: "desc" },
+        });
+        return tenants.map((t) => ({
+          id: t.id,
+          name: t.name,
+          slug: t.slug,
+          plan: t.plan.toUpperCase(),
+          subscriptionPlan: t.plan.toUpperCase(),
+          status: t.status,
+          isActive: t.status === "active",
+          subscriptionExpiresAt: t.planExpiresAt
+            ? t.planExpiresAt.toISOString()
+            : new Date(Date.now() + 30 * 86400000).toISOString(),
+          createdAt: t.createdAt.toISOString(),
+        }));
+      } catch {
+        return [];
+      }
+    },
+  );
 
   fastify.post(
     "/admin/tenants/:id/update-plan",
-    async (request: FastifyRequest<{ Params: { id: string } }>) => {
-      const { id } = request.params;
+    { preHandler: verifyAdminAccess },
+    async (request: FastifyRequest) => {
+      const { id } = request.params as { id: string };
       const body = (request.body as any) || {};
-      const plan = sanitizeString(body.plan || "PRO", 40).toLowerCase();
-      const durationMonths = sanitizeNumber(body.durationMonths, {
-        min: 1,
-        max: 120,
-        fallback: 1,
-      });
+      const plan = sanitizeString(
+        body.plan || body.subscriptionTier || "PRO",
+        40,
+      ).toLowerCase();
+      const durationMonths = sanitizeNumber(
+        body.durationMonths ?? body.tokenToAdd,
+        {
+          min: 1,
+          max: 120,
+          fallback: 1,
+        },
+      );
 
       const expiresAt = new Date();
       expiresAt.setMonth(expiresAt.getMonth() + durationMonths);
@@ -345,11 +569,25 @@ export async function superadminRoutes(fastify: FastifyInstance) {
         },
       });
 
+      await prisma.auditLog.create({
+        data: {
+          tenantId: id,
+          userId: request.user?.userId || "admin",
+          action: "TENANT_PLAN_UPDATED",
+          resourceType: "Tenant",
+          resourceId: id,
+          newData: JSON.stringify({ plan, durationMonths }),
+        },
+      });
+
       return { success: true, tenant: updated };
     },
   );
 
-  fastify.get("/admin/purchase-requests", async () => {
+  fastify.get(
+    "/admin/purchase-requests",
+    { preHandler: verifyAdminAccess },
+    async () => {
     const orders = await prisma.purchaseOrder.findMany({
       include: {
         tenant: true,

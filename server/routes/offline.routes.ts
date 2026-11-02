@@ -59,7 +59,8 @@ export const offlineRoutes: FastifyPluginAsync = async (
         outletId: payload.outletId,
         cashierId,
         offlineId: payload.offlineId || payload.idempotencyKey || createId(),
-        payload: payload,
+        payload:
+          typeof payload === "string" ? payload : JSON.stringify(payload),
         status: "PENDING_SYNC",
         attempts: 0,
         createdAt: now,

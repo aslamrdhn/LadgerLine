@@ -202,14 +202,23 @@ async function handleSaleVoided(tx: PrismaTransaction, payload: any) {
 
 async function handlePeriodClosed(tx: PrismaTransaction, payload: any) {
   console.log(`📄 Period closed: ${payload.periodId}`);
-  await tx.archiveJob.create({
-    data: {
+  const existing = await tx.archiveJob.findFirst({
+    where: {
       tenantId: payload.tenantId,
       periodId: payload.periodId,
       reportType: "DAILY_CLOSING",
-      status: "PENDING",
     },
   });
+  if (!existing) {
+    await tx.archiveJob.create({
+      data: {
+        tenantId: payload.tenantId,
+        periodId: payload.periodId,
+        reportType: "DAILY_CLOSING",
+        status: "PENDING",
+      },
+    });
+  }
 }
 
 async function handleStockConflictAlert(tx: PrismaTransaction, payload: any) {
@@ -266,22 +275,31 @@ async function handleFifoAllocationJob(tx: PrismaTransaction, payload: any) {
       tx,
     );
 
-    await tx.salesHeader.update({
-      where: { id: job.salesId },
-      data: { totalHpp: hppResult.totalHpp.toNumber(), isHppCalculated: true },
-    });
-
     const sale = await tx.salesHeader.findUnique({
       where: { id: job.salesId },
     });
-    if (sale && sale.hppJournalLineId && sale.inventoryJournalLineId) {
-      await tx.journalLine.update({
-        where: { id: sale.hppJournalLineId },
-        data: { debit: hppResult.totalHpp.toNumber() },
+
+    // Only update SalesHeader & JournalLine if FIFO layer allocation returned a positive HPP
+    if (hppResult.totalHpp.greaterThan(0)) {
+      await tx.salesHeader.update({
+        where: { id: job.salesId },
+        data: { totalHpp: hppResult.totalHpp.toNumber(), isHppCalculated: true },
       });
-      await tx.journalLine.update({
-        where: { id: sale.inventoryJournalLineId },
-        data: { credit: hppResult.totalHpp.toNumber() },
+
+      if (sale && sale.hppJournalLineId && sale.inventoryJournalLineId) {
+        await tx.journalLine.update({
+          where: { id: sale.hppJournalLineId },
+          data: { debit: hppResult.totalHpp.toNumber() },
+        });
+        await tx.journalLine.update({
+          where: { id: sale.inventoryJournalLineId },
+          data: { credit: hppResult.totalHpp.toNumber() },
+        });
+      }
+    } else {
+      await tx.salesHeader.update({
+        where: { id: job.salesId },
+        data: { isHppCalculated: true },
       });
     }
 

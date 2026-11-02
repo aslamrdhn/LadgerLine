@@ -30,7 +30,14 @@ export async function mediaRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const body = (request.body as any) || {};
-        const rawDataUrl = String(body.imageData || body.dataUrl || "").trim();
+        const rawDataUrl = String(
+          body.imageData ||
+            body.dataUrl ||
+            body.base64Data ||
+            body.image ||
+            body.file ||
+            "",
+        ).trim();
 
         if (!rawDataUrl.startsWith("data:image/")) {
           return reply.status(400).send({
@@ -83,6 +90,7 @@ export async function mediaRoutes(fastify: FastifyInstance) {
           mimeType,
           sizeBytes: buffer.byteLength,
           imageUrl,
+          url: imageUrl,
         });
       } catch (err: any) {
         return reply.status(500).send({

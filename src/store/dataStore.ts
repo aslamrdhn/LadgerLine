@@ -738,6 +738,35 @@ export const useDataStore = create<DataStoreState>()(
           ledgerEvents: [...state.ledgerEvents, newLedgerEvent],
           financeLogs: [newFinanceLog, ...state.financeLogs],
         });
+
+        // Persist PO Receiving to backend database (Receiving, InventoryBalance, FifoLayer, InventoryLedger, JournalEntry)
+        const savedStore = localStorage.getItem("aslam_ledger_current_store");
+        const tenantId = savedStore ? JSON.parse(savedStore).id : "aslam-brew";
+        const token =
+          localStorage.getItem("ledgerline_jwt_token") ||
+          localStorage.getItem("aslam_ledger_token") ||
+          "";
+
+        fetch("/api/procurement/receive", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Tenant-Id": tenantId,
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            poNumber,
+            materialId: targetMat.id,
+            materialName: targetMat.name,
+            quantity,
+            unitCost,
+            supplierName,
+            notes,
+            paymentMethod: "CASH",
+          }),
+        }).catch((err) => {
+          console.error("Failed to persist PO receiving to backend:", err);
+        });
       },
 
       resetToStandardCoffeeRoasterySeed: () => {
@@ -780,9 +809,32 @@ export const useDataStore = create<DataStoreState>()(
                 Authorization: `Bearer ${localStorage.getItem("ledgerline_jwt_token")}`,
               },
               body: JSON.stringify({
-                ...order,
-                id: undefined,
+                items: (order.items || []).map((item: any) => ({
+                  menuId: item.productId,
+                  productId: item.productId,
+                  name: item.productName || item.name || "",
+                  quantity: item.quantity,
+                })),
+                payments: [
+                  {
+                    method: order.paymentMethod || "CASH",
+                    amount: String(
+                      Math.ceil(
+                        Number(
+                          (order as any).amountPaid ||
+                            (order as any).totalAmount ||
+                            (order as any).total ||
+                            0,
+                        ) * 1.15,
+                      ),
+                    ),
+                  },
+                ],
+                tableNumber: order.tableNumber || "Dine-In",
+                offlineId: order.id,
+                idempotencyKey: order.id,
                 isOfflineSync: true,
+                forceStock: true,
               }),
             });
             if (response.ok) {

@@ -30,8 +30,13 @@ export default function SupplyHubAdmin({
     fetchData();
   }, [activeTab]);
 
+  const getAdminToken = () =>
+    localStorage.getItem("ledgerline_jwt_token") ||
+    localStorage.getItem("aslam_ledger_token") ||
+    "demo-owner-token";
+
   const fetchData = async () => {
-    const rootToken = localStorage.getItem("aslam_ledger_token");
+    const rootToken = getAdminToken();
     const headers = { Authorization: `Bearer ${rootToken}` };
     try {
       if (activeTab === "suppliers") {
@@ -63,7 +68,7 @@ export default function SupplyHubAdmin({
     subscriptionTier: string,
     tokenToAdd: number,
   ) => {
-    const rootToken = localStorage.getItem("aslam_ledger_token");
+    const rootToken = getAdminToken();
     try {
       await fetch(`/api/admin/tenants/${id}/update-plan`, {
         method: "POST",
@@ -82,7 +87,7 @@ export default function SupplyHubAdmin({
     status: string,
     verification_status?: string,
   ) => {
-    const rootToken = localStorage.getItem("aslam_ledger_token");
+    const rootToken = getAdminToken();
     try {
       await fetch(`/api/admin/suppliers/${id}/status`, {
         method: "POST",
@@ -101,7 +106,7 @@ export default function SupplyHubAdmin({
     status: string,
     rejection_reason?: string,
   ) => {
-    const rootToken = localStorage.getItem("aslam_ledger_token");
+    const rootToken = getAdminToken();
     try {
       await fetch(`/api/admin/products/${id}/status`, {
         method: "POST",

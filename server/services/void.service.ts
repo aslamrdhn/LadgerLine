@@ -131,6 +131,54 @@ export async function voidSale(input: TVoidPayload) {
           const engine = await CostEngineFactory.getEngine(validated.tenantId);
           await engine.rollbackSalesAllocation(sale.id, validated.tenantId, tx);
 
+          // Restore InventoryBalance & record VOID_REVERSAL in InventoryLedger
+          const originalLedgers = await tx.inventoryLedger.findMany({
+            where: {
+              tenantId: validated.tenantId,
+              referenceId: sale.id,
+              qtyOut: { gt: 0 },
+            },
+          });
+          for (const leg of originalLedgers) {
+            const bal = await tx.inventoryBalance.findUnique({
+              where: {
+                tenantId_itemId_warehouseId: {
+                  tenantId: validated.tenantId,
+                  itemId: leg.itemId,
+                  warehouseId: leg.warehouseId,
+                },
+              },
+            });
+            const nextStock = Number(bal?.currentStock ?? 0) + Number(leg.qtyOut);
+            if (bal) {
+              await tx.inventoryBalance.update({
+                where: { id: bal.id },
+                data: {
+                  currentStock: { increment: Number(leg.qtyOut) },
+                  version: { increment: 1 },
+                },
+              });
+            }
+            await tx.inventoryLedger.create({
+              data: {
+                tenantId: validated.tenantId,
+                outletId: leg.outletId,
+                warehouseId: leg.warehouseId,
+                itemId: leg.itemId,
+                movementType: "VOID_REVERSAL",
+                referenceType: "VOID_SALE",
+                referenceId: sale.id,
+                businessDate: new Date(),
+                qtyIn: Number(leg.qtyOut),
+                qtyOut: 0,
+                balanceAfter: nextStock,
+                unitCost: Number(leg.unitCost || 0),
+                costMethod: leg.costMethod || "FIFO",
+                unitSnapshot: leg.unitSnapshot || "pcs",
+              },
+            });
+          }
+
           await createVoidReversingJournal(tx, sale, validated.cashierId);
 
           const voided = await tx.salesHeader.update({
@@ -301,6 +349,15 @@ async function createVoidReversingJournal(
       new Decimal(0),
     );
 
+  const saleTotal = new Decimal(sale.totalAmount ? sale.totalAmount.toString() : 0);
+  const totalPaid = cashTotal.plus(digitalTotal);
+  const rawChangeDue = Decimal.max(new Decimal(0), totalPaid.minus(saleTotal));
+  const netCashTotal = Decimal.max(new Decimal(0), cashTotal.minus(rawChangeDue));
+  const remainingOverpayment = Decimal.max(new Decimal(0), rawChangeDue.minus(cashTotal));
+  const netDigitalTotal = Decimal.max(new Decimal(0), digitalTotal.minus(remainingOverpayment));
+
+  const saleHppDecimal = new Decimal(sale.totalHpp ? sale.totalHpp.toString() : 0);
+
   let lines = [
     {
       accountId: revenueAccount.id,
@@ -308,14 +365,16 @@ async function createVoidReversingJournal(
       credit: new Decimal(0),
     },
     {
+      // Reverse HPP: Credit HPP
       accountId: hppAccount.id,
-      debit: new Decimal(sale.totalHpp ? sale.totalHpp.toString() : 0),
-      credit: new Decimal(0),
+      debit: new Decimal(0),
+      credit: saleHppDecimal,
     },
     {
+      // Restore Inventory Asset: Debit PERSEDIAAN
       accountId: inventoryAccount.id,
-      debit: new Decimal(0),
-      credit: new Decimal(sale.totalHpp ? sale.totalHpp.toString() : 0),
+      debit: saleHppDecimal,
+      credit: new Decimal(0),
     },
     {
       accountId: taxPayableAccount.id,
@@ -331,25 +390,25 @@ async function createVoidReversingJournal(
     },
   ];
 
-  if (cashTotal.greaterThan(0)) {
+  if (netCashTotal.greaterThan(0)) {
     lines.push({
       accountId: cashAccount.id,
       debit: new Decimal(0),
-      credit: cashTotal,
+      credit: netCashTotal,
     });
   }
-  if (digitalTotal.greaterThan(0)) {
+  if (netDigitalTotal.greaterThan(0)) {
     lines.push({
       accountId: bankAccount.id,
       debit: new Decimal(0),
-      credit: digitalTotal,
+      credit: netDigitalTotal,
     });
   }
-  if (cashTotal.isZero() && digitalTotal.isZero()) {
+  if (netCashTotal.isZero() && netDigitalTotal.isZero()) {
     lines.push({
       accountId: cashAccount.id,
       debit: new Decimal(0),
-      credit: new Decimal(sale.totalAmount.toString()),
+      credit: saleTotal,
     });
   }
 

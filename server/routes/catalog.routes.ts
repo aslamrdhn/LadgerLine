@@ -503,4 +503,43 @@ export async function catalogRoutes(fastify: FastifyInstance) {
         "Pencatatan limbah/waste berhasil disimpan dan stok telah diperbarui",
     };
   });
+
+  // 4. Explicit Recipe / BOM Management Endpoints
+  const handleUpsertRecipe = async (request: FastifyRequest) => {
+    const body = (request.body as any) || {};
+    const ctx = await resolveTenantContext(
+      body.tenantId || getTenantHint(request),
+    );
+    const menuId = body.menuId || body.productId;
+    const items = body.items || body.recipes || body.details || [];
+
+    if (!menuId) {
+      return { success: false, message: "menuId atau productId wajib diisi" };
+    }
+
+    await upsertMenuRecipes(ctx.tenantId, menuId, items);
+    const recipe = await prisma.recipe.findFirst({
+      where: { tenantId: ctx.tenantId, menuId },
+      include: { details: { include: { item: true, unit: true } } },
+      orderBy: { version: "desc" },
+    });
+
+    return {
+      success: true,
+      recipe,
+      data: recipe,
+    };
+  };
+
+  fastify.get("/recipes", async (request: FastifyRequest) => {
+    const ctx = await resolveTenantContext(getTenantHint(request));
+    const recipes = await prisma.recipe.findMany({
+      where: { tenantId: ctx.tenantId },
+      include: { details: { include: { item: true, unit: true } } },
+    });
+    return { success: true, data: recipes, recipes };
+  });
+
+  fastify.post("/recipes", handleUpsertRecipe);
+  fastify.post("/product-recipes", handleUpsertRecipe);
 }

@@ -114,6 +114,7 @@ export const CheckoutPayloadSchema = z.object({
   discountPercent: z.number().min(0).max(100).default(0),
   note: z.string().max(200).optional(),
   idempotencyKey: z.string().optional(),
+  offlineId: z.string().optional(),
   forceStock: z.boolean().default(false),
   skipPeriodValidation: z.boolean().default(false),
   originalBusinessDate: z.string().datetime().optional(),
@@ -223,10 +224,19 @@ export async function checkout(
             orderBy: [{ tenantId: "asc" }, { effectiveDate: "desc" }],
           });
 
-          // Default to 0% tax if not configured yet for the tenant
+          let fallbackTaxRate = 0.11;
+          try {
+            const parsedCfg = JSON.parse(tenant.config || "{}");
+            if (typeof parsedCfg.taxPercentage === "number") {
+              fallbackTaxRate = parsedCfg.taxPercentage / 100;
+            }
+          } catch {
+            fallbackTaxRate = 0.11;
+          }
+
           const taxRateDecimal = taxRate
             ? new Decimal(taxRate.rate.toString())
-            : new Decimal(0);
+            : new Decimal(fallbackTaxRate.toString());
 
           // ============================================================
           // STEP 2: MENU & RECIPE
@@ -593,7 +603,7 @@ export async function checkout(
               totalAmount: total.toNumber(),
               status: validated.skipPeriodValidation ? "LATE_ENTRY" : "POSTED",
               idempotencyKey: validated.idempotencyKey,
-              offlineId: null,
+              offlineId: validated.offlineId || null,
               totalHpp: 0,
               isHppCalculated: false,
               note: validated.note,
@@ -798,6 +808,12 @@ export async function checkout(
               new Decimal(0),
             );
 
+          // Deduct changeDue from cash tendered so KAS reflects actual net cash retained in drawer
+          const rawChangeDue = Decimal.max(new Decimal(0), totalPaid.minus(total));
+          const netCashTotal = Decimal.max(new Decimal(0), cashTotal.minus(rawChangeDue));
+          const remainingOverpayment = Decimal.max(new Decimal(0), rawChangeDue.minus(cashTotal));
+          const netDigitalTotal = Decimal.max(new Decimal(0), digitalTotal.minus(remainingOverpayment));
+
           let lines = [
             {
               accountId: revenueAccount.id,
@@ -826,17 +842,17 @@ export async function checkout(
             },
           ];
 
-          if (cashTotal.greaterThan(0)) {
+          if (netCashTotal.greaterThan(0)) {
             lines.push({
               accountId: cashAccount.id,
-              debit: cashTotal,
+              debit: netCashTotal,
               credit: new Decimal(0),
             });
           }
-          if (digitalTotal.greaterThan(0)) {
+          if (netDigitalTotal.greaterThan(0)) {
             lines.push({
               accountId: bankAccount.id,
-              debit: digitalTotal,
+              debit: netDigitalTotal,
               credit: new Decimal(0),
             });
           }

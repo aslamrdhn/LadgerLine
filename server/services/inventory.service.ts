@@ -135,22 +135,15 @@ export class StockOpnameService {
           }
         }
 
-        const oldVersion = balance.version;
-        const updated = await tx.inventoryBalance.updateMany({
-          where: { id: balance.id, version: oldVersion },
+        // Synchronize final physical stock on InventoryBalance
+        await tx.inventoryBalance.update({
+          where: { id: balance.id },
           data: {
             currentStock: opname.physicalStock,
             version: { increment: 1 },
             lastUpdated: new Date(),
           },
         });
-
-        if (updated.count === 0) {
-          throw new LedgerError(
-            "LOCK-001",
-            "Optimistic locking conflict on stock opname",
-          );
-        }
 
         const costMethod =
           opname.tenant.plan === "cashier" ? "FIFO" : "AVERAGE";
@@ -236,15 +229,15 @@ export class WasteService {
         itemId: data.itemId,
         quantity: qtyDec.toNumber(),
         reason: data.reason,
-        status: needsApproval ? "pending" : "approved",
+        status: "pending",
         createdBy: data.createdBy,
-        approvedBy: needsApproval ? null : data.createdBy,
-        approvedAt: needsApproval ? null : new Date(),
+        approvedBy: null,
+        approvedAt: null,
       },
     });
 
     if (!needsApproval) {
-      await this.approve(waste.id, data.createdBy);
+      return await this.approve(waste.id, data.createdBy);
     }
 
     return waste;
@@ -279,6 +272,9 @@ export class WasteService {
         const engine = await CostEngineFactory.getEngine(waste.tenantId);
         const qtyDec = new Decimal(waste.quantity.toString());
         const diffDec = qtyDec.negated();
+        const newStock = new Decimal(balance.currentStock.toString()).minus(
+          qtyDec,
+        );
 
         await engine.adjustStock(
           {
@@ -291,27 +287,6 @@ export class WasteService {
           waste.tenantId,
           tx,
         );
-
-        const newStock = new Decimal(balance.currentStock.toString()).minus(
-          qtyDec,
-        );
-        const oldVersion = balance.version;
-
-        const updated = await tx.inventoryBalance.updateMany({
-          where: { id: balance.id, version: oldVersion },
-          data: {
-            currentStock: newStock.toNumber(),
-            version: { increment: 1 },
-            lastUpdated: new Date(),
-          },
-        });
-
-        if (updated.count === 0) {
-          throw new LedgerError(
-            "LOCK-001",
-            "Optimistic locking conflict on waste processing",
-          );
-        }
 
         const costMethod = waste.tenant.plan === "cashier" ? "FIFO" : "AVERAGE";
 

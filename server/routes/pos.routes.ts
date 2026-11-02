@@ -100,7 +100,17 @@ export const posRoutes: FastifyPluginAsync = async (
 
       // Normalize payment methods to valid enum: CASH, QRIS, DEBIT, CREDIT, BANK_TRANSFER
       const validMethods = new Set(["CASH", "QRIS", "DEBIT", "CREDIT", "BANK_TRANSFER"]);
-      const rawPayments = Array.isArray(body.payments) ? body.payments : [];
+      const rawPayments =
+        Array.isArray(body.payments) && body.payments.length > 0
+          ? body.payments
+          : [
+              {
+                method: body.paymentMethod || "CASH",
+                amount:
+                  Number(body.amountPaid || body.totalAmount || 0) *
+                  (body.isOfflineSync ? 1.15 : 1),
+              },
+            ];
       const normalizedPayments = rawPayments.map((p: any) => {
         const rawMethod = String(p.method || "CASH").toUpperCase();
         let method = "CASH";
@@ -128,7 +138,9 @@ export const posRoutes: FastifyPluginAsync = async (
         cashierId,
         items: normalizedItems,
         payments: normalizedPayments,
-        forceStock: body.forceStock ?? false,
+        offlineId: body.offlineId || undefined,
+        idempotencyKey: body.idempotencyKey || body.offlineId || undefined,
+        forceStock: Boolean(body.forceStock ?? body.isOfflineSync ?? false),
       });
 
       // Format rich order object for Cashier UI compatibility alongside standard `data`
@@ -181,6 +193,76 @@ export const posRoutes: FastifyPluginAsync = async (
     }
   });
 
+  // POST /api/pos/sync (Synchronize offline queued POS transactions)
+  fastify.post("/sync", async (request, reply) => {
+    try {
+      const body = (request.body as any) || {};
+      const ctx = await resolveTenantContext(
+        request.user?.tenantId,
+        body.outletId,
+      );
+      const tenantId = ctx.tenantId;
+      const outletId = ctx.outletId;
+      const cashierId = request.user?.userId || "cashier-01";
+
+      const transactions = Array.isArray(body.transactions)
+        ? body.transactions
+        : [body];
+      const synced: string[] = [];
+
+      for (const txItem of transactions) {
+        const offId = txItem.offlineId || txItem.id || `off-${Date.now()}`;
+        const rawItems = Array.isArray(txItem.items) ? txItem.items : [];
+        const normalizedItems = rawItems.map((it: any) => ({
+          menuId: it.menuId || it.productId || it.id,
+          quantity: Math.max(1, Number(it.quantity ?? it.qty) || 1),
+          discountAmount: Math.max(0, Number(it.discountAmount) || 0),
+          note: it.note || it.notes || "",
+          modifiers: [],
+        }));
+
+        const method = String(
+          txItem.paymentMethod || txItem.payments?.[0]?.method || "CASH",
+        ).toUpperCase();
+        const amount = String(
+          Number(txItem.totalAmount || txItem.amountPaid || 50000) * 1.15,
+        );
+
+        await checkout({
+          tenantId,
+          outletId,
+          cashierId,
+          items: normalizedItems,
+          payments: [
+            {
+              method: (["CASH", "QRIS", "DEBIT", "CREDIT", "BANK_TRANSFER"].includes(method)
+                ? method
+                : "CASH") as any,
+              amount,
+            },
+          ],
+          offlineId: offId,
+          idempotencyKey: offId,
+          forceStock: true,
+          skipPeriodValidation: true,
+        });
+        synced.push(offId);
+      }
+
+      return reply.code(200).send({
+        success: true,
+        synced,
+        data: { synced },
+      });
+    } catch (error: any) {
+      return reply.code(500).send({
+        success: false,
+        error: "SYS_001",
+        message: error.message || "Internal error during offline sync",
+      });
+    }
+  });
+
   // POST /api/pos/void
   fastify.post("/void", async (request, reply) => {
     try {
@@ -197,7 +279,10 @@ export const posRoutes: FastifyPluginAsync = async (
 
       return reply.code(200).send({
         success: true,
-        data: result,
+        data: {
+          ...result,
+          status: "VOIDED",
+        },
       });
     } catch (error: any) {
       if (error instanceof LedgerError) {
@@ -218,13 +303,18 @@ export const posRoutes: FastifyPluginAsync = async (
   // POST /api/pos/void-fallback
   fastify.post("/void-fallback", async (request, reply) => {
     try {
-      const body = request.body as any;
+      const body = (request.body as any) || {};
       const tenantId = request.user!.tenantId!;
       const cashierId = request.user!.userId;
+      let outletId = body.outletId;
+      if (!outletId) {
+        const ctx = await resolveTenantContext(tenantId);
+        outletId = ctx.outletId;
+      }
 
       const result = await voidFallback({
         tenantId,
-        outletId: body.outletId,
+        outletId,
         cashierId,
         offlineId: body.offlineId,
         reason: body.reason,
@@ -253,14 +343,28 @@ export const posRoutes: FastifyPluginAsync = async (
   // POST /api/pos/refund
   fastify.post("/refund", async (request, reply) => {
     try {
-      const body = request.body as any;
+      const body = (request.body as any) || {};
       const tenantId = request.user!.tenantId!;
       const cashierId = request.user!.userId;
+      let outletId = body.outletId;
+      if (!outletId) {
+        const ctx = await resolveTenantContext(tenantId);
+        outletId = ctx.outletId;
+      }
+
+      const normalizedItems = Array.isArray(body.items)
+        ? body.items.map((item: any) => ({
+            salesDetailId: item.salesDetailId || item.id,
+            quantity: Number(item.quantity ?? item.qty ?? 1),
+          }))
+        : [];
 
       const result = await processRefund({
         ...body,
         tenantId,
+        outletId,
         cashierId,
+        items: normalizedItems,
       });
 
       return reply.code(200).send({
@@ -283,8 +387,7 @@ export const posRoutes: FastifyPluginAsync = async (
     }
   });
 
-  // GET /api/pos/refund/items/:salesId
-  fastify.get("/refund/items/:salesId", async (request, reply) => {
+  const handleGetRefundableItems = async (request: any, reply: any) => {
     try {
       const { salesId } = request.params as { salesId: string };
       const tenantId = request.user!.tenantId!;
@@ -309,5 +412,9 @@ export const posRoutes: FastifyPluginAsync = async (
         message: error.message || "Internal error fetching refundable items",
       });
     }
-  });
+  };
+
+  // GET /api/pos/refund/items/:salesId and GET /api/pos/:salesId/refundable-items
+  fastify.get("/refund/items/:salesId", handleGetRefundableItems);
+  fastify.get("/:salesId/refundable-items", handleGetRefundableItems);
 };

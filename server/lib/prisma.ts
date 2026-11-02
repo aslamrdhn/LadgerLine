@@ -1,4 +1,10 @@
+import path from "path";
 import { PrismaClient, Prisma } from "@prisma/client";
+
+if (!process.env.SQLITE_URL) {
+  const dbPath = path.resolve(process.cwd(), "prisma/dev.db");
+  process.env.SQLITE_URL = `file:${dbPath}`;
+}
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;

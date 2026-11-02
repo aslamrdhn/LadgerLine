@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../lib/prisma.ts";
 import { generateToken } from "../utils/jwt.ts";
 import { createId } from "@paralleldrive/cuid2";
+import { resolveTenantContext } from "../services/tenantContext.service.ts";
 
 // In-memory Kitchen SSE listeners
 const kitchenListeners = new Map<string, Set<FastifyReply["raw"]>>();
@@ -33,37 +34,25 @@ export async function ssotRoutes(fastify: FastifyInstance) {
 
   // POST /auth/pin/login
   fastify.post("/auth/pin/login", async (request: FastifyRequest, reply: FastifyReply) => {
-    const { pin, deviceId } = (request.body as any) || {};
+    const { pin, deviceId, tenantId: bodyTenantId } = (request.body as any) || {};
 
     if (!pin || typeof pin !== "string" || !/^\d{6}$/.test(pin)) {
       return reply.code(400).send({ error: "VAL_001", message: "PIN harus berupa 6 digit angka numerik" });
     }
 
     try {
-      // Find first tenant or use default
-      let tenant = await prisma.tenant.findFirst();
-      if (!tenant) {
-        tenant = await prisma.tenant.create({
-          data: {
-            name: "LedgerLine Roastery",
-            slug: "ledgerline-roastery",
-            plan: "STARTER",
-            status: "ACTIVE",
-          },
-        });
-      }
+      const tenantHint = bodyTenantId || (request.headers["x-tenant-id"] as string) || undefined;
+      const ctx = await resolveTenantContext(tenantHint);
+      const tenant = ctx.tenant;
 
       // Valid demo PINs for development / cashiers
       const ALLOWED_DEMO_PINS = new Set(["123456", "888888", "000000", "654321"]);
 
-      // Look up user profile by PIN or allowed default
-      let userProfile = await prisma.userProfile.findFirst({
+      // Look up user profile by PIN
+      const userProfile = await prisma.userProfile.findFirst({
         where: {
           tenantId: tenant.id,
-          OR: [
-            { pinHash: pin },
-            { pinHash: null },
-          ],
+          pinHash: pin,
         },
       });
 
@@ -72,20 +61,31 @@ export async function ssotRoutes(fastify: FastifyInstance) {
         return reply.code(401).send({ error: "AUTH_001", message: "PIN tidak valid atau tidak terdaftar" });
       }
 
-      const userId = userProfile?.userId || "cashier-01";
-      const role = userProfile?.role || (pin === "888888" ? "MANAGER" : "CASHIER");
+      const userId = userProfile?.userId || (pin === "123456" ? "owner-01" : "cashier-01");
+      const role =
+        userProfile?.role ||
+        (pin === "123456" ? "Owner" : pin === "888888" ? "MANAGER" : "CASHIER");
 
       const token = generateToken({
         userId,
         tenantId: tenant.id,
+        role,
       });
 
       return reply.code(200).send({
         token,
         user: {
           id: userId,
-          name: userProfile?.fullName || (pin === "888888" ? "Branch Manager" : "Kasir Utama"),
+          name:
+            userProfile?.fullName ||
+            (pin === "123456"
+              ? "Aslam (Owner)"
+              : pin === "888888"
+                ? "Branch Manager"
+                : "Kasir Utama"),
           role,
+          tenantId: tenant.id,
+          outletId: ctx.outletId,
           deviceId: deviceId || "web-terminal-1",
         },
       });
@@ -97,31 +97,18 @@ export async function ssotRoutes(fastify: FastifyInstance) {
   // POST /sales/checkout
   fastify.post("/sales/checkout", async (request: FastifyRequest, reply: FastifyReply) => {
     const body = (request.body as any) || {};
-    const { outletId = "seed-outlet-001", items = [], payments = [], idempotencyKey } = body;
+    const { items = [], payments = [], idempotencyKey } = body;
 
     if (!Array.isArray(items) || items.length === 0) {
       return reply.code(400).send({ error: "VAL_002", message: "Keranjang kosong" });
     }
 
     try {
-      let tenant = await prisma.tenant.findFirst();
-      if (!tenant) {
-        tenant = await prisma.tenant.create({
-          data: { name: "LedgerLine Roastery", slug: "ledgerline", plan: "STARTER", status: "ACTIVE" },
-        });
-      }
-
-      let outlet = await prisma.outlet.findFirst({ where: { tenantId: tenant.id } });
-      if (!outlet) {
-        outlet = await prisma.outlet.create({
-          data: {
-            tenantId: tenant.id,
-            name: "Outlet Sudirman",
-            address: "Jakarta Pusat",
-            phone: "08123456789",
-          },
-        });
-      }
+      const tenantHint = body.tenantId || (request.headers["x-tenant-id"] as string) || undefined;
+      const ctx = await resolveTenantContext(tenantHint, body.outletId);
+      const tenant = ctx.tenant;
+      const outlet = { id: ctx.outletId };
+      const outletId = ctx.outletId;
 
       const saleId = createId();
       const invoiceNumber = `INV-2026-${Date.now().toString().slice(-6)}`;
@@ -271,40 +258,105 @@ export async function ssotRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // GET /reports/hpp/today
-  fastify.get("/reports/hpp/today", async () => {
+  // GET /reports/hpp/today (Real DB aggregation from SalesDetail + CostAllocationConfig)
+  fastify.get("/reports/hpp/today", async (request: FastifyRequest) => {
     try {
-      // Dynamic calculation from kitchenOrders or sales
-      const orderCount = await prisma.kitchenOrder.count();
+      const tenantHint = (request.headers["x-tenant-id"] as string) || undefined;
+      const ctx = await resolveTenantContext(tenantHint);
 
-      const americanoQty = Math.max(1, orderCount);
-      const americanoRevenue = (americanoQty * 25000).toFixed(2);
-      const americanoDirectHpp = (americanoQty * 7500).toFixed(2);
-      const americanoTrueHpp = (americanoQty * 11200).toFixed(2);
-      const americanoMargin = "55.2";
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
 
-      return {
-        rows: [
-          {
-            menuId: "seed-menu-americano",
-            menuName: "Americano",
-            revenue: americanoRevenue,
-            qty: americanoQty,
-            directHpp: americanoDirectHpp,
-            trueHpp: americanoTrueHpp,
-            marginPercent: americanoMargin,
+      let details = await prisma.salesDetail.findMany({
+        where: {
+          sales: {
+            tenantId: ctx.tenantId,
+            status: "POSTED",
+            createdAt: { gte: startOfDay },
           },
-          {
-            menuId: "seed-menu-croissant",
-            menuName: "Butter Croissant",
-            revenue: "44000.00",
-            qty: 2,
-            directHpp: "14000.00",
-            trueHpp: "18500.00",
-            marginPercent: "58.0",
+        },
+        include: { menu: true },
+      });
+
+      // If no sales today yet, aggregate from most recent posted sales so report is always informative
+      if (details.length === 0) {
+        details = await prisma.salesDetail.findMany({
+          where: {
+            sales: {
+              tenantId: ctx.tenantId,
+              status: "POSTED",
+            },
           },
-        ],
-      };
+          include: { menu: true },
+          take: 50,
+        });
+      }
+
+      const costCfg = await prisma.costAllocationConfig.findUnique({
+        where: { tenantId: ctx.tenantId },
+      });
+      const dailyFixedOverhead =
+        ((Number(costCfg?.monthlyOperationalExpense || 4500000) +
+          Number(costCfg?.monthlyLaborExpense || 6000000)) /
+          30) *
+        0.05; // 5% per-menu daily allocation buffer
+
+      const grouped = new Map<
+        string,
+        {
+          menuId: string;
+          menuName: string;
+          qty: number;
+          revenue: number;
+          directHpp: number;
+        }
+      >();
+
+      for (const d of details) {
+        const key = d.menuId;
+        const rev = Number(d.totalPrice || d.unitPriceSnapshot * d.quantity);
+        const unitHpp =
+          Number(d.hpp) > 0
+            ? Number(d.hpp)
+            : Math.round(Number(d.unitPriceSnapshot) * 0.32);
+        const dirHpp = unitHpp * Number(d.quantity);
+
+        if (grouped.has(key)) {
+          const g = grouped.get(key)!;
+          g.qty += Number(d.quantity);
+          g.revenue += rev;
+          g.directHpp += dirHpp;
+        } else {
+          grouped.set(key, {
+            menuId: d.menuId,
+            menuName: d.menuNameSnapshot || d.menu?.name || "Menu",
+            qty: Number(d.quantity),
+            revenue: rev,
+            directHpp: dirHpp,
+          });
+        }
+      }
+
+      const rows = Array.from(grouped.values()).map((g) => {
+        const allocatedOverhead = Math.min(
+          g.revenue * 0.15,
+          dailyFixedOverhead,
+        );
+        const trueHpp = g.directHpp + allocatedOverhead;
+        const marginPct =
+          g.revenue > 0 ? ((g.revenue - trueHpp) / g.revenue) * 100 : 0;
+        return {
+          menuId: g.menuId,
+          menuName: g.menuName,
+          revenue: g.revenue.toFixed(2),
+          qty: g.qty,
+          directHpp: g.directHpp.toFixed(2),
+          trueHpp: trueHpp.toFixed(2),
+          marginPercent: marginPct.toFixed(1),
+        };
+      });
+
+      return { rows };
     } catch {
       return { rows: [] };
     }

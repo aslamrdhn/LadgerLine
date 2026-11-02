@@ -39,6 +39,22 @@ export async function createApp() {
     bodyLimit: 15 * 1024 * 1024, // 15MB to support CSV/JSON backup & menu image uploads
   });
 
+  // Gracefully allow empty body when Content-Type is application/json
+  fastify.removeContentTypeParser("application/json");
+  fastify.addContentTypeParser(
+    "application/json",
+    { parseAs: "string" },
+    (_req, body, done) => {
+      try {
+        const str = typeof body === "string" ? body.trim() : "";
+        done(null, str ? JSON.parse(str) : {});
+      } catch (err: any) {
+        err.statusCode = 400;
+        done(err, undefined);
+      }
+    },
+  );
+
   // Global Input Sanitization Hook (runs before route handlers)
   fastify.addHook("preValidation", sanitizeRequestHook);
 

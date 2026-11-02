@@ -1,8 +1,33 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import jwt from "jsonwebtoken";
 import { prisma } from "../lib/prisma.ts";
 import { resolveTenantContext } from "../services/tenantContext.service.ts";
 import { sanitizeEmail, sanitizeNumber, sanitizePhone, sanitizeString } from "../utils/sanitizer.ts";
-import { reserveNumbers } from "../services/numbering.service.ts";
+
+const JWT_SECRET =
+  process.env.JWT_SECRET ||
+  "enterprise_ledgerline_saas_secret_key_change_in_prod";
+
+function generateToken(payload: { userId: string; supplierId: string }): string {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
+}
+
+function extractSupplierIdFromAuth(request: FastifyRequest): string {
+  const authHeader = request.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) return "";
+  const rawToken = authHeader.replace("Bearer ", "").trim();
+  if (!rawToken || rawToken === "null" || rawToken === "undefined") return "";
+  try {
+    const decoded = jwt.verify(rawToken, JWT_SECRET) as {
+      supplierId?: string;
+      userId?: string;
+    };
+    return decoded.supplierId || decoded.userId || "";
+  } catch {
+    // Fallback for legacy UUID token in existing localStorage session
+    return rawToken;
+  }
+}
 
 export async function supplierRoutes(fastify: FastifyInstance) {
   // Helper to support both /auth/register and /register
@@ -36,14 +61,19 @@ export async function supplierRoutes(fastify: FastifyInstance) {
           legalName: companyName,
           contactEmail,
           phone,
-          status: "VERIFIED", // Auto-verify in enterprise self-service or allow immediate login
+          status: "VERIFIED",
           verifiedAt: new Date(),
           verifiedBy: "system",
         },
       });
+      const signedToken = generateToken({
+        userId: supplier.id,
+        supplierId: supplier.id,
+      });
       return {
         success: true,
         message: "Pendaftaran kemitraan berhasil.",
+        token: signedToken,
         supplier: {
           id: supplier.id,
           companyName: supplier.name,
@@ -75,7 +105,6 @@ export async function supplierRoutes(fastify: FastifyInstance) {
         where: { contactEmail },
       });
 
-      // If logging in with a new email in demo/evaluation, auto-provision or find first verified supplier
       if (!supplier) {
         supplier = await prisma.supplier.create({
           data: {
@@ -88,9 +117,14 @@ export async function supplierRoutes(fastify: FastifyInstance) {
         });
       }
 
+      const signedToken = generateToken({
+        userId: supplier.id,
+        supplierId: supplier.id,
+      });
+
       return {
         success: true,
-        token: supplier.id,
+        token: signedToken,
         supplier: {
           id: supplier.id,
           name: supplier.name,
@@ -111,8 +145,7 @@ export async function supplierRoutes(fastify: FastifyInstance) {
   // Purchase Requests for this supplier
   fastify.get("/purchase-requests", async (request) => {
     await resolveTenantContext();
-    const authHeader = request.headers.authorization;
-    const id = authHeader ? authHeader.replace("Bearer ", "").trim() : "";
+    const id = extractSupplierIdFromAuth(request);
 
     const whereClause = id ? { supplierId: id } : {};
     const pos = await prisma.purchaseOrder.findMany({
@@ -161,6 +194,7 @@ export async function supplierRoutes(fastify: FastifyInstance) {
     const { id } = request.params as { id: string };
     const { action } = (request.body as any) || {};
     const upperAction = String(action || "").toUpperCase();
+    const callerSupplierId = extractSupplierIdFromAuth(request);
 
     let newStatus = "PENDING";
     if (upperAction === "APPROVE" || upperAction === "FULFILL" || upperAction === "FULFILLED") {
@@ -170,6 +204,23 @@ export async function supplierRoutes(fastify: FastifyInstance) {
     }
 
     try {
+      const existingPo = await prisma.purchaseOrder.findUnique({
+        where: { id },
+      });
+      if (!existingPo) {
+        return reply.code(404).send({
+          success: false,
+          message: "Purchase Order tidak ditemukan",
+        });
+      }
+      if (callerSupplierId && existingPo.supplierId !== callerSupplierId) {
+        return reply.code(403).send({
+          success: false,
+          error: "AUT_003",
+          message: "Akses ditolak: PO ini bukan milik akun Supplier Anda",
+        });
+      }
+
       await prisma.purchaseOrder.update({
         where: { id },
         data: {
@@ -186,8 +237,7 @@ export async function supplierRoutes(fastify: FastifyInstance) {
   // Supplier Products Catalog
   fastify.get("/products", async (request) => {
     await resolveTenantContext();
-    const authHeader = request.headers.authorization;
-    const id = authHeader ? authHeader.replace("Bearer ", "").trim() : "";
+    const id = extractSupplierIdFromAuth(request);
 
     const catalog = await prisma.supplierCatalog.findMany({
       where: id ? { supplierId: id } : {},
@@ -209,8 +259,7 @@ export async function supplierRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post("/products", async (request, reply) => {
-    const authHeader = request.headers.authorization;
-    let supplierId = authHeader ? authHeader.replace("Bearer ", "").trim() : "";
+    let supplierId = extractSupplierIdFromAuth(request);
 
     if (!supplierId) {
       const firstSup = await prisma.supplier.findFirst();

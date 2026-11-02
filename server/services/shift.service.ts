@@ -1,6 +1,7 @@
 import { prisma } from "../lib/prisma.ts";
 import { LedgerError } from "../utils/errorCodes.ts";
 import { Decimal } from "../utils/money.ts";
+import { resolveTenantContext } from "./tenantContext.service.ts";
 
 export class AttendanceService {
   async openShift(cashierId: string, outletId: string) {
@@ -9,8 +10,9 @@ export class AttendanceService {
       select: { tenantId: true },
     });
 
-    if (!user || !user.tenantId)
-      throw new LedgerError("VAL-002", "User profile not found");
+    const ctx = await resolveTenantContext(user?.tenantId || undefined, outletId);
+    const resolvedTenantId = user?.tenantId || ctx.tenantId;
+    const resolvedOutletId = outletId || ctx.outletId;
 
     const openShift = await prisma.shift.findFirst({
       where: {
@@ -19,16 +21,14 @@ export class AttendanceService {
       },
     });
 
-    if (openShift)
-      throw new LedgerError(
-        "SYS-001",
-        "A shift is already open for this cashier",
-      );
+    if (openShift) {
+      return openShift;
+    }
 
     return prisma.shift.create({
       data: {
-        tenantId: user.tenantId,
-        outletId,
+        tenantId: resolvedTenantId,
+        outletId: resolvedOutletId,
         cashierId,
         startTime: new Date(),
         status: "open",
@@ -146,8 +146,9 @@ export class AttendanceService {
       select: { tenantId: true },
     });
 
-    if (!user || !user.tenantId)
-      throw new LedgerError("VAL-002", "User not found");
+    const ctx = await resolveTenantContext(user?.tenantId || undefined, outletId);
+    const resolvedTenantId = user?.tenantId || ctx.tenantId;
+    const resolvedOutletId = outletId || ctx.outletId;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -178,8 +179,8 @@ export class AttendanceService {
     return prisma.attendanceLog.create({
       data: {
         userId,
-        tenantId: user.tenantId,
-        outletId,
+        tenantId: resolvedTenantId,
+        outletId: resolvedOutletId,
         checkIn: new Date(),
       },
     });

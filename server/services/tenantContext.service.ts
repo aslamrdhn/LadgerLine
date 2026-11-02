@@ -156,6 +156,7 @@ export async function ensureEnterpriseProvisioning() {
       { code: "BANK", name: "Bank / Non-Tunai / QRIS", type: "ASSET", normalBalance: "DEBIT" },
       { code: "PERSEDIAAN", name: "Persediaan Bahan Baku", type: "ASSET", normalBalance: "DEBIT" },
       { code: "PPN_KELUARAN", name: "Hutang Pajak PPN", type: "LIABILITY", normalBalance: "CREDIT" },
+      { code: "UTANG_USAHA", name: "Hutang Usaha Supplier", type: "LIABILITY", normalBalance: "CREDIT" },
       { code: "SERVICE_CHARGE", name: "Service Charge", type: "LIABILITY", normalBalance: "CREDIT" },
       { code: "PENDAPATAN", name: "Pendapatan Penjualan", type: "REVENUE", normalBalance: "CREDIT" },
       { code: "HPP", name: "Harga Pokok Penjualan", type: "EXPENSE", normalBalance: "DEBIT" },
@@ -176,6 +177,22 @@ export async function ensureEnterpriseProvisioning() {
           },
         });
       }
+    }
+
+    // 6.5. Ensure Default Active TaxRate (PPN 11%)
+    const existingTaxRate = await prisma.taxRate.findFirst({
+      where: { tenantId: tenant.id, status: "ACTIVE" },
+    });
+    if (!existingTaxRate) {
+      await prisma.taxRate.create({
+        data: {
+          tenantId: tenant.id,
+          name: "PPN 11%",
+          rate: 0.11,
+          effectiveDate: new Date(2020, 0, 1),
+          status: "ACTIVE",
+        },
+      });
     }
 
     // 7. Ensure Cost Allocation Config

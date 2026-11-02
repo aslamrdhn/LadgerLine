@@ -113,10 +113,16 @@ export class AverageCostEngine implements ICostEngine {
         });
       }
 
+      const detailRow = await transaction.salesDetail.findUnique({
+        where: { id: salesDetailId },
+        select: { quantity: true },
+      });
+      const detailQty = Math.max(1, Number(detailRow?.quantity || 1));
+
       await transaction.salesDetail.update({
         where: { id: salesDetailId },
         data: {
-          hpp: totalCost.toNumber(),
+          hpp: totalCost.dividedBy(detailQty).toNumber(),
           hppStatus: "ALLOCATED",
         },
       });
@@ -329,29 +335,40 @@ export class AverageCostEngine implements ICostEngine {
       );
     }
 
-    await transaction.inventoryLedger.create({
-      data: {
-        tenantId: tenantId,
-        outletId: "",
-        warehouseId: adjustment.warehouseId,
-        itemId: adjustment.itemId,
-        movementType: adjustment.reason.startsWith("REFUND")
-          ? "REFUND"
-          : "STOCK_ADJUSTMENT",
-        referenceType: "ADJUSTMENT",
-        referenceId: adjustment.reason,
-        businessDate: new Date(),
-        qtyIn: adjustment.quantity.greaterThan(0)
-          ? adjustment.quantity.toNumber()
-          : 0,
-        qtyOut: adjustment.quantity.lessThan(0)
-          ? Math.abs(adjustment.quantity.toNumber())
-          : 0,
-        balanceAfter: newStock.toNumber(),
-        unitCost: adjustment.unitCost ? adjustment.unitCost.toNumber() : 0,
-        costMethod: "AVERAGE",
-        unitSnapshot: "pcs",
+    const outlet = await transaction.outlet.findFirst({
+      where: {
+        tenantId,
+        ...(adjustment.warehouseId
+          ? { defaultWarehouseId: adjustment.warehouseId }
+          : {}),
       },
-    });
+    }) || (await transaction.outlet.findFirst({ where: { tenantId } }));
+
+    if (outlet) {
+      await transaction.inventoryLedger.create({
+        data: {
+          tenantId: tenantId,
+          outletId: outlet.id,
+          warehouseId: adjustment.warehouseId,
+          itemId: adjustment.itemId,
+          movementType: adjustment.reason.startsWith("REFUND")
+            ? "REFUND"
+            : "STOCK_ADJUSTMENT",
+          referenceType: "ADJUSTMENT",
+          referenceId: adjustment.reason,
+          businessDate: new Date(),
+          qtyIn: adjustment.quantity.greaterThan(0)
+            ? adjustment.quantity.toNumber()
+            : 0,
+          qtyOut: adjustment.quantity.lessThan(0)
+            ? Math.abs(adjustment.quantity.toNumber())
+            : 0,
+          balanceAfter: newStock.toNumber(),
+          unitCost: adjustment.unitCost ? adjustment.unitCost.toNumber() : 0,
+          costMethod: "AVERAGE",
+          unitSnapshot: "pcs",
+        },
+      });
+    }
   }
 }

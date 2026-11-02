@@ -72,39 +72,47 @@ export async function dailyClosing(tenantId: string) {
     const endOfDay = new Date(today);
     endOfDay.setHours(23, 59, 59, 999);
 
-    const currentPeriod = await tx.period.findFirst({
+    // Only auto-close periods whose endDate has passed (end of month/period),
+    // never close the currently active open period in the middle of the workday!
+    const expiredOpenPeriod = await tx.period.findFirst({
       where: {
         tenantId,
-        startDate: { lte: startOfDay },
-        endDate: { gte: endOfDay },
+        endDate: { lt: startOfDay },
         status: "OPEN",
       },
+      orderBy: { startDate: "asc" },
     });
 
-    if (!currentPeriod) {
-      console.log(
-        `No open period found for tenant ${tenantId} on ${startOfDay.toISOString()}`,
-      );
+    if (!expiredOpenPeriod) {
       return;
     }
 
-    await closePeriod(tx, tenantId, currentPeriod.id, "SOFT_CLOSED");
+    await closePeriod(tx, tenantId, expiredOpenPeriod.id, "SOFT_CLOSED");
 
-    await tx.archiveJob.create({
-      data: {
+    const existingArchive = await tx.archiveJob.findFirst({
+      where: {
         tenantId,
-        periodId: currentPeriod.id,
+        periodId: expiredOpenPeriod.id,
         reportType: "DAILY_CLOSING",
-        status: "PENDING",
       },
     });
+    if (!existingArchive) {
+      await tx.archiveJob.create({
+        data: {
+          tenantId,
+          periodId: expiredOpenPeriod.id,
+          reportType: "DAILY_CLOSING",
+          status: "PENDING",
+        },
+      });
+    }
 
     await tx.outbox.create({
       data: {
         tenantId,
         eventType: "PeriodClosed",
         payload: JSON.stringify({
-          periodId: currentPeriod.id,
+          periodId: expiredOpenPeriod.id,
           tenantId,
           date: startOfDay.toISOString().split("T")[0],
         }),
@@ -112,7 +120,7 @@ export async function dailyClosing(tenantId: string) {
     });
 
     console.log(
-      `📄 Daily closing completed for tenant ${tenantId} on ${startOfDay.toISOString()}. Archive job created.`,
+      `📄 Period closing completed for tenant ${tenantId} on period ${expiredOpenPeriod.name}. Archive job created.`,
     );
   });
 }

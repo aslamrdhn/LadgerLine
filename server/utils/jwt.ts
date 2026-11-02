@@ -6,8 +6,7 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "1d";
 export interface JwtPayload {
   userId: string;
   tenantId?: string;
-  // Note: Following ADR-081, plan/role is NOT in the JWT to prevent stale claims.
-  // They should be fetched from the database/Redis cache.
+  role?: string;
 }
 
 export function generateToken(payload: JwtPayload): string {

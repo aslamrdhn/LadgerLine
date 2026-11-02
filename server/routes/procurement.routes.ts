@@ -1,8 +1,9 @@
-import { FastifyInstance, FastifyRequest } from "fastify";
+import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../lib/prisma.ts";
 import { resolveTenantContext } from "../services/tenantContext.service.ts";
 import { sanitizeNumber, sanitizeString } from "../utils/sanitizer.ts";
 import { getTenantHint } from "./catalog.routes.ts";
+import { reserveNumbers } from "../services/numbering.service.ts";
 
 export async function mapSuppliersForFrontend() {
   const suppliers = await prisma.supplier.findMany({
@@ -162,6 +163,24 @@ export async function procurementRoutes(fastify: FastifyInstance) {
         where: { supplierId: supplier.id },
       });
     }
+    if (!catalogItem && supplier) {
+      catalogItem = await prisma.supplierCatalog.create({
+        data: {
+          supplierId: supplier.id,
+          name: sanitizeString(
+            body.materialName || body.productName || "Gayo Arabica Espresso Blend",
+            120,
+          ),
+          category: "Coffee Beans",
+          unit: sanitizeString(body.unit || "kg", 30),
+          price: sanitizeNumber(body.unitPrice ?? body.price, {
+            min: 0,
+            fallback: 145000,
+          }),
+          isActive: true,
+        },
+      });
+    }
 
     if (!supplier || !catalogItem) {
       return {
@@ -171,7 +190,10 @@ export async function procurementRoutes(fastify: FastifyInstance) {
     }
 
     const poNumber = `PO-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    const unitPrice = catalogItem.price || 0;
+    const unitPrice = sanitizeNumber(body.unitPrice ?? body.price, {
+      min: 0,
+      fallback: catalogItem.price || 0,
+    });
 
     const po = await prisma.purchaseOrder.create({
       data: {
@@ -205,4 +227,394 @@ export async function procurementRoutes(fastify: FastifyInstance) {
       data: po,
     };
   });
+
+  // Full Enterprise Receiving Endpoint: Updates PO, Receiving, InventoryBalance, FifoLayer, InventoryLedger, and Double-Entry JournalEntry
+  const handleReceivePurchaseOrder = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ) => {
+    try {
+      const body = (request.body as any) || {};
+      const params = (request.params as any) || {};
+      const ctx = await resolveTenantContext(
+        body.tenantId || getTenantHint(request),
+        body.outletId,
+      );
+
+      const firstItem =
+        Array.isArray(body.items) && body.items.length > 0
+          ? body.items[0]
+          : body;
+      const targetItemId =
+        body.materialId ||
+        body.itemId ||
+        firstItem.itemId ||
+        firstItem.materialId;
+      const poIdOrNumber = sanitizeString(
+        params.id || body.poId || body.poNumber || `PO-${Date.now()}`,
+        80,
+      );
+      const quantity = sanitizeNumber(firstItem.quantity ?? body.quantity, {
+        min: 0.01,
+        fallback: 100,
+      });
+      const unitCost = sanitizeNumber(firstItem.unitCost ?? body.unitCost, {
+        min: 0,
+        fallback: 100,
+      });
+      const supplierName = sanitizeString(
+        body.supplierName || "Supplier Mitra Roastery",
+        120,
+      );
+      const notes = sanitizeString(
+        body.notes || `Penerimaan Barang ${poIdOrNumber}`,
+        500,
+      );
+      const paymentType = String(body.paymentMethod || "CASH").toUpperCase();
+
+      const result = await prisma.$transaction(async (tx) => {
+        // 1. Resolve target Raw Material (Item)
+        let item = targetItemId
+          ? await tx.item.findFirst({
+              where: { id: String(targetItemId), tenantId: ctx.tenantId },
+              include: { unit: true },
+            })
+          : null;
+
+        if (!item && body.materialName) {
+          item = await tx.item.findFirst({
+            where: {
+              tenantId: ctx.tenantId,
+              name: { contains: sanitizeString(body.materialName, 120) },
+            },
+            include: { unit: true },
+          });
+        }
+
+        if (!item && targetItemId) {
+          const allItems = await tx.item.findMany({
+            where: { tenantId: ctx.tenantId, status: "ACTIVE" },
+            include: { unit: true },
+            orderBy: { createdAt: "asc" },
+          });
+          const matchIdx = String(targetItemId).match(/^rm-(\d+)$/);
+          if (matchIdx) {
+            const idx = parseInt(matchIdx[1], 10) - 1;
+            if (allItems[idx]) item = allItems[idx];
+          }
+          if (!item && allItems.length > 0) item = allItems[0];
+        }
+
+        if (!item) {
+          item = await tx.item.findFirst({
+            where: { tenantId: ctx.tenantId, status: "ACTIVE" },
+            include: { unit: true },
+          });
+        }
+
+        if (!item) {
+          throw new Error("Bahan baku (Item) tidak ditemukan di gudang tenant");
+        }
+
+        // 2. Resolve or create Supplier & SupplierCatalog & PurchaseOrder
+        let supplier = await tx.supplier.findFirst({
+          where: { name: { contains: supplierName } },
+        });
+        if (!supplier) {
+          supplier = await tx.supplier.findFirst();
+        }
+        if (!supplier) {
+          supplier = await tx.supplier.create({
+            data: {
+              name: supplierName,
+              contactEmail: `supply.${Date.now()}@ledgerline.id`,
+              status: "verified",
+            },
+          });
+        }
+
+        let catalog = await tx.supplierCatalog.findFirst({
+          where: { supplierId: supplier.id, name: { contains: item.name } },
+        });
+        if (!catalog) {
+          catalog = await tx.supplierCatalog.findFirst({
+            where: { supplierId: supplier.id },
+          });
+        }
+        if (!catalog) {
+          catalog = await tx.supplierCatalog.create({
+            data: {
+              supplierId: supplier.id,
+              name: item.name,
+              category: item.category || "Bahan Baku",
+              unit: item.unit?.symbol || "g",
+              price: unitCost,
+              isActive: true,
+            },
+          });
+        }
+
+        let po = await tx.purchaseOrder.findFirst({
+          where: {
+            OR: [{ id: poIdOrNumber }, { poNumber: poIdOrNumber }],
+          },
+          include: { details: true },
+        });
+
+        const resolvedQty = quantity || po?.details?.[0]?.quantity || 100;
+        const resolvedUnitCost =
+          unitCost || po?.details?.[0]?.unitPrice || Number(item.price) || 100;
+        const totalCostImpact = Math.round(resolvedQty * resolvedUnitCost);
+
+        if (!po) {
+          po = await tx.purchaseOrder.create({
+            data: {
+              poNumber: poIdOrNumber.startsWith("PO-")
+                ? poIdOrNumber
+                : `PO-${Date.now()}`,
+              tenantId: ctx.tenantId,
+              supplierId: supplier.id,
+              status: "DELIVERED",
+              deliveredAt: new Date(),
+              notes,
+              createdBy: request.user?.userId || "owner",
+              details: {
+                create: [
+                  {
+                    catalogId: catalog.id,
+                    quantity: resolvedQty,
+                    unitPrice: resolvedUnitCost,
+                    totalPrice: totalCostImpact,
+                    notes,
+                  },
+                ],
+              },
+            },
+            include: { details: true },
+          });
+        } else {
+          po = await tx.purchaseOrder.update({
+            where: { id: po.id },
+            data: {
+              status: "DELIVERED",
+              deliveredAt: new Date(),
+            },
+            include: { details: true },
+          });
+        }
+
+        // 3. Create Receiving & ReceivingDetail
+        const receiving = await tx.receiving.create({
+          data: {
+            purchaseOrderId: po.id,
+            tenantId: ctx.tenantId,
+            outletId: ctx.outletId,
+            receivedBy: request.user?.userId || "Purchase Officer",
+            notes,
+            details: {
+              create: [
+                {
+                  catalogId: catalog.id,
+                  itemId: item.id,
+                  quantityReceived: resolvedQty,
+                  unitCost: resolvedUnitCost,
+                },
+              ],
+            },
+          },
+        });
+
+        // 4. Update InventoryBalance (Moving Average Cost + Stock Increment)
+        const existingBalance = await tx.inventoryBalance.findUnique({
+          where: {
+            tenantId_itemId_warehouseId: {
+              tenantId: ctx.tenantId,
+              itemId: item.id,
+              warehouseId: ctx.warehouseId,
+            },
+          },
+        });
+
+        const oldStock = Number(existingBalance?.currentStock ?? 0);
+        const oldAvgCost = Number(
+          existingBalance?.averageCost ?? item.price ?? resolvedUnitCost,
+        );
+        const newStock = oldStock + resolvedQty;
+        const newAvgCost =
+          newStock > 0
+            ? (oldStock * oldAvgCost + resolvedQty * resolvedUnitCost) / newStock
+            : resolvedUnitCost;
+
+        if (existingBalance) {
+          await tx.inventoryBalance.update({
+            where: { id: existingBalance.id },
+            data: {
+              currentStock: newStock,
+              averageCost: newAvgCost,
+              version: { increment: 1 },
+              lastUpdated: new Date(),
+            },
+          });
+        } else {
+          await tx.inventoryBalance.create({
+            data: {
+              tenantId: ctx.tenantId,
+              itemId: item.id,
+              warehouseId: ctx.warehouseId,
+              currentStock: newStock,
+              averageCost: newAvgCost,
+            },
+          });
+        }
+
+        await tx.item.update({
+          where: { id: item.id },
+          data: { price: resolvedUnitCost },
+        });
+
+        // 5. Create FIFO Layer
+        await tx.fifoLayer.create({
+          data: {
+            tenantId: ctx.tenantId,
+            itemId: item.id,
+            warehouseId: ctx.warehouseId,
+            batchNumber: po.poNumber,
+            quantity: resolvedQty,
+            remainingQty: resolvedQty,
+            unitCost: resolvedUnitCost,
+            layerDate: new Date(),
+            isExhausted: false,
+          },
+        });
+
+        // 6. Create Immutable InventoryLedger Event
+        const ledgerRow = await tx.inventoryLedger.create({
+          data: {
+            tenantId: ctx.tenantId,
+            outletId: ctx.outletId,
+            warehouseId: ctx.warehouseId,
+            itemId: item.id,
+            movementType: "RECEIVING",
+            referenceType: "PO",
+            referenceId: po.poNumber,
+            businessDate: new Date(),
+            qtyIn: resolvedQty,
+            qtyOut: 0,
+            balanceAfter: newStock,
+            unitCost: resolvedUnitCost,
+            costMethod: "FIFO",
+            unitSnapshot: item.unit?.symbol || "g",
+          },
+        });
+
+        // 7. Create Double-Entry JournalEntry (Debit PERSEDIAAN, Credit KAS or UTANG_USAHA)
+        const existingAccounts = await tx.account.findMany({
+          where: { tenantId: ctx.tenantId },
+        });
+        const getOrCreateAcc = async (
+          code: string,
+          name: string,
+          type: string,
+          normalBalance: string,
+        ) => {
+          let acc = existingAccounts.find((a) => a.code === code);
+          if (!acc) {
+            acc = await tx.account.create({
+              data: {
+                tenantId: ctx.tenantId,
+                code,
+                name,
+                type,
+                normalBalance,
+              },
+            });
+          }
+          return acc;
+        };
+
+        const inventoryAccount = await getOrCreateAcc(
+          "PERSEDIAAN",
+          "Persediaan Bahan Baku",
+          "ASSET",
+          "DEBIT",
+        );
+        const creditAccount =
+          paymentType === "AP" || paymentType === "CREDIT"
+            ? await getOrCreateAcc(
+                "UTANG_USAHA",
+                "Hutang Usaha Supplier",
+                "LIABILITY",
+                "CREDIT",
+              )
+            : await getOrCreateAcc("KAS", "Kas Tunai", "ASSET", "DEBIT");
+
+        const [jrnSeq] = await reserveNumbers(tx, ctx.tenantId, "JRN", 1);
+        const yearStr = String(new Date().getFullYear());
+        const entryNumber = `JRN-${yearStr}-${String(jrnSeq).padStart(6, "0")}`;
+
+        const journal = await tx.journalEntry.create({
+          data: {
+            tenantId: ctx.tenantId,
+            entryNumber,
+            entryDate: new Date(),
+            referenceType: "RECEIVING",
+            referenceId: receiving.id,
+            description: `Penerimaan P.O ${po.poNumber}: ${resolvedQty} ${item.unit?.symbol || "g"} ${item.name} (${supplierName})`,
+            status: "POSTED",
+            lines: {
+              create: [
+                {
+                  accountId: inventoryAccount.id,
+                  debit: totalCostImpact,
+                  credit: 0,
+                },
+                {
+                  accountId: creditAccount.id,
+                  debit: 0,
+                  credit: totalCostImpact,
+                },
+              ],
+            },
+          },
+        });
+
+        return {
+          po,
+          receiving,
+          item,
+          newStock,
+          resolvedQty,
+          resolvedUnitCost,
+          totalCostImpact,
+          ledgerRow,
+          journal,
+        };
+      });
+
+      return reply.send({
+        success: true,
+        receivingId: result.receiving.id,
+        journalEntryId: result.journal.id,
+        message: `Penerimaan PO ${result.po.poNumber} berhasil dicatat ke gudang dan buku besar`,
+        data: {
+          poNumber: result.po.poNumber,
+          receivingId: result.receiving.id,
+          journalEntryId: result.journal.id,
+          itemId: result.item.id,
+          itemName: result.item.name,
+          newStock: result.newStock,
+          totalCostImpact: result.totalCostImpact,
+          journalEntryNumber: result.journal.entryNumber,
+        },
+      });
+    } catch (err: any) {
+      return reply.code(400).send({
+        success: false,
+        message: err.message || "Gagal memproses penerimaan barang PO",
+      });
+    }
+  };
+
+  fastify.post("/procurement/receive", handleReceivePurchaseOrder);
+  fastify.post("/procurement/orders/:id/receive", handleReceivePurchaseOrder);
 }

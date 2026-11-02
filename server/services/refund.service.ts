@@ -82,12 +82,9 @@ export async function processRefund(input: TRefundPayload) {
       const itemSubtotal = unitPrice.times(item.quantity);
       refundSubtotal = refundSubtotal.plus(itemSubtotal);
 
-      const totalDetailHpp = new Decimal(
+      const unitHpp = new Decimal(
         detail.hpp ? detail.hpp.toString() : 0,
       );
-      const unitHpp = detail.quantity > 0
-        ? totalDetailHpp.dividedBy(detail.quantity)
-        : new Decimal(0);
       const hppRefund = roundMoney(unitHpp.times(item.quantity));
       refundHpp = refundHpp.plus(hppRefund);
 
@@ -370,7 +367,11 @@ export async function processRefund(input: TRefundPayload) {
       },
     });
 
-    return returnOrder;
+    return {
+      ...returnOrder,
+      refundId: returnOrder.id,
+      totalRefundAmount: Number(returnOrder.totalRefund),
+    };
   });
 }
 
@@ -407,11 +408,13 @@ export async function getRefundableItems(salesId: string, tenantId: string) {
   return sale.details.map((detail) => {
     const refundedQty = refundedMap.get(detail.id) || 0;
     const availableQty = Math.max(0, detail.quantity - refundedQty);
-    const unitHpp =
-      detail.quantity > 0 ? Number(detail.hpp) / detail.quantity : 0;
+    const unitHpp = Number(detail.hpp);
 
     return {
+      id: detail.id,
       detailId: detail.id,
+      salesDetailId: detail.id,
+      menuId: detail.menuId,
       menuName: detail.menu?.name || detail.menuNameSnapshot,
       purchasedQty: detail.quantity,
       refundedQty,

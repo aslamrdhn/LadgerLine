@@ -74,7 +74,7 @@ export class TrueHppService {
       const entry = todayMap.get(key)!;
       entry.revenue += Number(detail.totalPrice);
       entry.qty += detail.quantity;
-      entry.directHpp += Number(detail.hpp || 0);
+      entry.directHpp += Number(detail.hpp || 0) * detail.quantity;
     }
 
     const config = await prisma.costAllocationConfig.findUnique({
