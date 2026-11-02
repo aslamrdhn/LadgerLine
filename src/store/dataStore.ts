@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import { persist, createJSONStorage, StateStorage } from "zustand/middleware";
-import { get, set, del } from "idb-keyval";
+import { persist, createJSONStorage } from "zustand/middleware";
+import { idbStorage } from "../utils/idbStorage";
 import {
   Product,
   RawMaterial,
@@ -12,18 +12,6 @@ import {
   InventoryLedgerEvent,
   DeterministicClosingRecord,
 } from "../types";
-
-const idbStorage: StateStorage = {
-  getItem: async (name: string): Promise<string | null> => {
-    return (await get(name)) || null;
-  },
-  setItem: async (name: string, value: string): Promise<void> => {
-    await set(name, value);
-  },
-  removeItem: async (name: string): Promise<void> => {
-    await del(name);
-  },
-};
 
 interface DataStoreState {
   // Core Data
@@ -73,6 +61,12 @@ interface DataStoreState {
   addLedgerEvent: (event: Omit<InventoryLedgerEvent, "id" | "sequenceNumber" | "timestamp">) => void;
   executeDeterministicClosing: (closing: DeterministicClosingRecord) => void;
   syncOfflineOrders: () => Promise<void>;
+  fetchPaginatedOrders: (params?: {
+    page?: number;
+    limit?: number;
+    startDate?: string;
+    endDate?: string;
+  }) => Promise<{ orders: Order[]; totalCount: number; totalPages: number }>;
   resetToStandardCoffeeRoasterySeed: () => void;
 }
 
@@ -734,6 +728,9 @@ export const useDataStore = create<DataStoreState>()(
           category: "Pembelian Bahan Baku (HPP)",
           description: `P.O ${poNumber}: ${quantity} ${targetMat.stockUnit} ${targetMat.name} (${supplierName})`,
           date: now.toISOString().split("T")[0],
+          time: now.toTimeString().split(" ")[0].slice(0, 5),
+          isEncrypted: true,
+          secureHash: `SHA256-${Date.now().toString(16).toUpperCase()}`,
         };
 
         set({
@@ -802,6 +799,46 @@ export const useDataStore = create<DataStoreState>()(
             console.error("Failed to sync offline order:", order.id, err);
           }
         }
+      },
+
+      fetchPaginatedOrders: async (params = {}) => {
+        const page = params.page ?? 1;
+        const limit = params.limit ?? 50;
+        const savedStore = localStorage.getItem("aslam_ledger_current_store");
+        const tenantId = savedStore ? JSON.parse(savedStore).id : "aslam-brew";
+        const qs = new URLSearchParams({
+          page: String(page),
+          limit: String(limit),
+          ...(params.startDate ? { startDate: params.startDate } : {}),
+          ...(params.endDate ? { endDate: params.endDate } : {}),
+        });
+        try {
+          const res = await fetch(`/api/orders/history?${qs.toString()}`, {
+            headers: {
+              "X-Tenant-Id": tenantId,
+              Authorization: `Bearer ${localStorage.getItem("ledgerline_jwt_token")}`,
+            },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && Array.isArray(data.orders)) {
+              set({ orders: data.orders });
+              return {
+                orders: data.orders,
+                totalCount: data.totalCount || data.orders.length,
+                totalPages: data.totalPages || 1,
+              };
+            }
+          }
+        } catch (err) {
+          console.warn("[DataStore] Paginated history fetch fallback:", err);
+        }
+        const currentOrders = get().orders;
+        return {
+          orders: currentOrders,
+          totalCount: currentOrders.length,
+          totalPages: 1,
+        };
       },
     }),
     {

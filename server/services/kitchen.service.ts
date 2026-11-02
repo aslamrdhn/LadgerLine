@@ -1,10 +1,12 @@
 import { redis } from "../lib/redis.ts";
 import { PrismaTransaction, prisma } from "../lib/prisma.ts";
 import { LedgerError } from "../utils/errorCodes.ts";
+import { broadcastKitchenEvent } from "../routes/ssot.routes.ts";
 
 const KDS_STATE_MACHINE: Record<string, string[]> = {
-  NEW: ["IN_PROGRESS", "READY"],
-  IN_PROGRESS: ["READY", "COMPLETED"],
+  PENDING_PAYMENT: ["NEW", "CANCELLED"],
+  NEW: ["IN_PROGRESS", "READY", "CANCELLED"],
+  IN_PROGRESS: ["READY", "COMPLETED", "CANCELLED"],
   READY: ["COMPLETED"],
   COMPLETED: [],
   CANCELLED: [],
@@ -27,7 +29,7 @@ export async function createKitchenOrder(
   if (!sale) throw new LedgerError("VAL_002", "Sale not found");
 
   const items = sale.details.map((d) => ({
-    menu_name: d.menu.name,
+    menu_name: d.menuNameSnapshot || d.menu.name,
     quantity: d.quantity,
     note: "",
   }));
@@ -50,6 +52,21 @@ export async function publishKitchenOrder(
   outletId: string,
   order: any,
 ): Promise<void> {
+  let items = [];
+  try {
+    items = typeof order.items === "string" ? JSON.parse(order.items) : order.items || [];
+  } catch {
+    items = [];
+  }
+  broadcastKitchenEvent(outletId, {
+    type: "NEW_ORDER",
+    order: {
+      id: order.id,
+      orderNumber: order.orderNumber,
+      status: order.status,
+      items,
+    },
+  });
   await redis.publish(
     `kitchen:${outletId}`,
     JSON.stringify({ type: "NEW", order }),

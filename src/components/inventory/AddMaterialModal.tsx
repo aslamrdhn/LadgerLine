@@ -61,7 +61,7 @@ export function AddMaterialModal({
       id: materialToEdit ? materialToEdit.id : `rm-${Date.now()}`,
       name: name.trim(),
       stockQuantity: Number(stock),
-      stockUnit: unit,
+      stockUnit: unit as RawMaterial["stockUnit"],
       warningLimit: Number(warningLimit),
       unitCost: Number(unitCost),
       supplierName: supplierName || "Supplier Mitra",

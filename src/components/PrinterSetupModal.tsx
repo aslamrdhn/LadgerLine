@@ -7,34 +7,27 @@ import {
   AlertTriangle,
   RefreshCw,
 } from "lucide-react";
+import { escposPrinter } from "../utils/escposPrinter";
 
 export const PrinterSetupModal: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [connectionType, setConnectionType] = useState<
-    "bluetooth" | "usb" | null
-  >(null);
-  const [deviceInfo, setDeviceInfo] = useState<string | null>(null);
+  const [deviceInfo, setDeviceInfo] = useState<string | null>(
+    escposPrinter.getStatus().deviceName,
+  );
   const [status, setStatus] = useState<
     "idle" | "connecting" | "connected" | "error"
-  >("idle");
+  >(escposPrinter.getStatus().isConnected ? "connected" : "idle");
   const [errorMessage, setErrorMessage] = useState("");
-  const [btDevice, setBtDevice] = useState<any>(null);
-  const [usbPort, setUsbPort] = useState<any>(null);
+  const [testNotice, setTestNotice] = useState<string | null>(null);
 
   const requestBluetooth = async () => {
     try {
       setStatus("connecting");
-      setConnectionType("bluetooth");
-      // @ts-expect-error Typescript web bluetooth api support
-      const device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: ["000018f0-0000-1000-8000-00805f9b34fb"], // Standard receipt printer service, often device specific
-      });
-      setBtDevice(device);
-      setDeviceInfo(`Bluetooth: ${device.name || "Unknown Printer"}`);
+      setTestNotice(null);
+      const info = await escposPrinter.connectBluetooth();
+      setDeviceInfo(info);
       setStatus("connected");
     } catch (err: any) {
-      console.error(err);
       setStatus("error");
       setErrorMessage(err.message || "Bluetooth connection failed");
     }
@@ -43,15 +36,11 @@ export const PrinterSetupModal: React.FC = () => {
   const requestUsb = async () => {
     try {
       setStatus("connecting");
-      setConnectionType("usb");
-      // @ts-expect-error Typescript web bluetooth api support
-      const port = await navigator.serial.requestPort();
-      await port.open({ baudRate: 9600 });
-      setUsbPort(port);
-      setDeviceInfo(`USB Serial Port Selected`);
+      setTestNotice(null);
+      const info = await escposPrinter.connectUsbSerial(9600);
+      setDeviceInfo(info);
       setStatus("connected");
     } catch (err: any) {
-      console.error(err);
       setStatus("error");
       setErrorMessage(err.message || "USB Serial connection failed");
     }
@@ -59,36 +48,12 @@ export const PrinterSetupModal: React.FC = () => {
 
   const testPrint = async () => {
     try {
-      // Basic ESC/POS command for testing: Init + text + line feed + cut
-      const encoder = new TextEncoder();
-      const escposData = new Uint8Array([
-        0x1b,
-        0x40, // Init
-        ...encoder.encode("TEST PRINT SUCCESSFUL\nLedgerLine Web POS\n\n\n"),
-        0x1d,
-        0x56,
-        0x41,
-        0x00, // Cut
-      ]);
-
-      if (connectionType === "bluetooth" && btDevice) {
-        // Assume Web Bluetooth write logic (needs gatt server connection)
-        if (!btDevice.gatt.connected) {
-          await btDevice.gatt.connect();
-        }
-        // NOTE: actual printing requires knowing the exact characteristic,
-        // which varies by printer. This is just an example stub for the API.
-        alert(
-          "Bluetooth test print simulated. Actual characteristic writing requires device-specific UUIDs.",
-        );
-      } else if (connectionType === "usb" && usbPort) {
-        const writer = usbPort.writable.getWriter();
-        await writer.write(escposData);
-        writer.releaseLock();
-      }
+      setTestNotice(null);
+      const res = await escposPrinter.printTestPage();
+      setTestNotice(res.message);
     } catch (err: any) {
-      console.error(err);
-      alert("Print failed: " + err.message);
+      setStatus("error");
+      setErrorMessage("Print failed: " + (err.message || "Unknown error"));
     }
   };
 
@@ -106,7 +71,7 @@ export const PrinterSetupModal: React.FC = () => {
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
-                Printer Connection Setup
+                Printer Connection Setup (ESC/POS)
               </h3>
               <button
                 onClick={() => setIsOpen(false)}
@@ -164,6 +129,11 @@ export const PrinterSetupModal: React.FC = () => {
                     <p className="text-[11px] text-emerald-650 font-mono break-all">
                       {deviceInfo}
                     </p>
+                    {testNotice && (
+                      <p className="text-[11px] text-emerald-700 font-bold pt-1">
+                        {testNotice}
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
@@ -190,15 +160,15 @@ export const PrinterSetupModal: React.FC = () => {
                   onClick={testPrint}
                   className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl text-xs transition-colors shadow-sm focus:outline-hidden"
                 >
-                  Print Test Page
+                  Print ESC/POS Test Page
                 </button>
               )}
             </div>
 
             <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 text-[10px] text-slate-500 text-center leading-relaxed">
               Requires Chrome 89+ or Edge 89+ for Web Bluetooth/Serial
-              capabilities. Please ensure your printer supports standard ESC/POS
-              commands.
+              capabilities. Supports standard 58mm & 80mm ESC/POS thermal
+              printers.
             </div>
           </div>
         </div>

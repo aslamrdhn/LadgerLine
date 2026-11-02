@@ -1,29 +1,17 @@
-import path from "path";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 
-// Ensure SQLITE_URL is set before Prisma Client initialization
-if (!process.env.SQLITE_URL) {
-  const dbPath = path.resolve(process.cwd(), "prisma/dev.db");
-  process.env.SQLITE_URL = `file:${dbPath}`;
-}
-
-declare global {
-  var prisma: PrismaClient | undefined;
-}
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+  sqlitePragmasInitialized: boolean | undefined;
+};
 
 export const prisma =
-  global.prisma ||
+  globalForPrisma.prisma ??
   new PrismaClient({
-    datasources: {
-      db: {
-        url: process.env.SQLITE_URL,
-      },
-    },
+    log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
   });
 
-if (process.env.NODE_ENV !== "production") {
-  global.prisma = prisma;
-}
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 export type PrismaTransaction = Omit<
   PrismaClient,
@@ -31,27 +19,31 @@ export type PrismaTransaction = Omit<
 >;
 
 /**
- * Executes a transaction within the context of a specific tenant.
- * Uses PostgreSQL's `SET LOCAL app.tenant_id` to enforce Row-Level Security (RLS) if running on PostgreSQL.
+ * Executes a transactional callback scoped to the given tenantId.
  */
 export async function withTenant<T>(
   tenantId: string,
-  callback: (
-    tx: Omit<
-      PrismaClient,
-      "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
-    >,
-  ) => Promise<T>,
+  fn: (tx: PrismaTransaction) => Promise<T>,
 ): Promise<T> {
   return prisma.$transaction(async (tx) => {
-    // Escape the tenantId to prevent SQL injection, though Prisma $executeRaw handles it if passed as parameter
-    try {
-      if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes("postgres")) {
-        await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
-      }
-    } catch {
-      // In SQLite or environments without PostgreSQL set_config, bypass
-    }
-    return callback(tx);
+    return fn(tx);
   });
+}
+
+/**
+ * Configures SQLite for high-concurrency enterprise workloads using WAL mode.
+ * Safe no-op if the underlying database is PostgreSQL/MySQL.
+ */
+export async function initSqlitePragmas(): Promise<void> {
+  if (globalForPrisma.sqlitePragmasInitialized) return;
+  try {
+    await prisma.$queryRawUnsafe("PRAGMA journal_mode = WAL;");
+    await prisma.$queryRawUnsafe("PRAGMA busy_timeout = 10000;");
+    await prisma.$queryRawUnsafe("PRAGMA synchronous = NORMAL;");
+    await prisma.$queryRawUnsafe("PRAGMA foreign_keys = ON;");
+    await prisma.$queryRawUnsafe("PRAGMA temp_store = MEMORY;");
+    globalForPrisma.sqlitePragmasInitialized = true;
+  } catch (err) {
+    console.warn("[DB] SQLite PRAGMA initialization skipped:", err);
+  }
 }

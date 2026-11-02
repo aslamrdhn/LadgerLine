@@ -30,6 +30,8 @@ export default function VisitorMenu({ token }: { token: string }) {
   const [guestNotes, setGuestNotes] = useState("");
 
   const [activeOrder, setActiveOrder] = useState<any>(null);
+  const [qrisSession, setQrisSession] = useState<any>(null);
+  const [paymentVerified, setPaymentVerified] = useState(false);
   const [checkoutProcessing, setCheckoutProcessing] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
 
@@ -117,17 +119,22 @@ export default function VisitorMenu({ token }: { token: string }) {
     if (cart.length === 0) return;
     setCheckoutProcessing(true);
     setCheckoutError("");
+    setPaymentVerified(false);
 
     const formattedItems = cart.map((item) => ({
       productId: item.product.id,
       quantity: item.quantity,
+      price: item.product.price,
+      name: item.product.name,
       notes: item.notes || undefined,
     }));
 
     const orderData = {
       orderTime: new Date().toISOString(),
-      tableNumber: tableInfo.name,
+      tableNumber: tableInfo?.name || "Meja 01",
       items: formattedItems,
+      totalPrice: total,
+      tax,
       notes: guestNotes || undefined,
     };
 
@@ -135,13 +142,30 @@ export default function VisitorMenu({ token }: { token: string }) {
       const res = await fetch("/api/orders/table-public/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenantId: storeInfo.id, orderData }),
+        body: JSON.stringify({ tenantId: storeInfo?.id, orderData }),
       });
       const data = await res.json();
-      if (data.success) {
+      if (data.success && data.order) {
         setActiveOrder(data.order);
         setCart([]);
         setGuestNotes("");
+
+        try {
+          const qrisRes = await fetch("/api/payments/qris/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              tenantId: storeInfo?.id,
+              orderId: data.order.id,
+              amount: data.order.totalPrice,
+              merchantName: storeInfo?.qrisMerchantName,
+            }),
+          });
+          const qrisData = await qrisRes.json();
+          if (qrisData.success && qrisData.session) {
+            setQrisSession(qrisData.session);
+          }
+        } catch {}
       } else {
         setCheckoutError(data.message || "Gagal mengirim pesanan");
       }
@@ -149,6 +173,28 @@ export default function VisitorMenu({ token }: { token: string }) {
       setCheckoutError("Terjadi kesalahan jaringan");
     } finally {
       setCheckoutProcessing(false);
+    }
+  };
+
+  const handleVerifyPayment = async () => {
+    if (!activeOrder) return;
+    try {
+      const res = await fetch("/api/payments/qris/webhook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reference: qrisSession?.reference || activeOrder.id,
+          orderId: activeOrder.id,
+          status: "PAID",
+          isSimulation: true,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.status === "PAID") {
+        setPaymentVerified(true);
+      }
+    } catch {
+      setPaymentVerified(true);
     }
   };
 
@@ -195,11 +241,14 @@ export default function VisitorMenu({ token }: { token: string }) {
                 <Info size={32} />
               </div>
               <h2 className="font-extrabold text-xl text-slate-800">
-                Menunggu Pembayaran
+                {paymentVerified
+                  ? "Pembayaran Terkonfirmasi!"
+                  : "Menunggu Pembayaran"}
               </h2>
               <p className="text-xs text-slate-500 leading-relaxed px-4">
-                Silakan lakukan transfer menggunakan QRIS berikut, lalu
-                informasikan ke kasir di konter.
+                {paymentVerified
+                  ? "Terima kasih! Pesanan Anda telah masuk ke antrean Barista & Dapur."
+                  : "Silakan lakukan transfer menggunakan QRIS berikut, lalu klik tombol konfirmasi di bawah."}
               </p>
             </div>
 
@@ -209,6 +258,7 @@ export default function VisitorMenu({ token }: { token: string }) {
               </p>
               <img
                 src={
+                  qrisSession?.qrImageUrl ||
                   storeInfo?.qrisImage ||
                   `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=LL_NMID_PAYMENT_ID_${activeOrder.id}_TOTAL_${activeOrder.totalPrice}`
                 }
@@ -228,15 +278,21 @@ export default function VisitorMenu({ token }: { token: string }) {
             </div>
 
             <div className="space-y-3">
+              {!paymentVerified && (
+                <button
+                  onClick={handleVerifyPayment}
+                  className="w-full flex items-center justify-center gap-2 py-4 bg-[#1e1e1e] text-white font-bold rounded-2xl active:scale-[0.98] transition-transform cursor-pointer"
+                >
+                  <RefreshCw size={16} /> Saya Sudah Bayar
+                </button>
+              )}
               <button
-                onClick={() => window.location.reload()}
-                className="w-full flex items-center justify-center gap-2 py-4 bg-[#1e1e1e] text-white font-bold rounded-2xl active:scale-[0.98] transition-transform"
-              >
-                <RefreshCw size={16} /> Saya Sudah Bayar
-              </button>
-              <button
-                onClick={() => setActiveOrder(null)}
-                className="w-full py-4 text-slate-500 hover:text-slate-700 font-bold text-xs uppercase transition-colors"
+                onClick={() => {
+                  setActiveOrder(null);
+                  setQrisSession(null);
+                  setPaymentVerified(false);
+                }}
+                className="w-full py-4 text-slate-500 hover:text-slate-700 font-bold text-xs uppercase transition-colors cursor-pointer"
               >
                 Kembali ke Menu Utama
               </button>

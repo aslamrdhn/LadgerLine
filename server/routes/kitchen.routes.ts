@@ -24,7 +24,7 @@ export const kitchenRoutes: FastifyPluginAsync = async (fastify: FastifyInstance
         items = [];
       }
 
-      broadcastKitchenEvent("seed-outlet-001", {
+      broadcastKitchenEvent(updated.outletId || "seed-outlet-001", {
         type: "STATUS_UPDATE",
         order: {
           id: updated.id,

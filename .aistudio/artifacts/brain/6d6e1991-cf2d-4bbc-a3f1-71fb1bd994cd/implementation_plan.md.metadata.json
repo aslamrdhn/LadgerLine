@@ -1,0 +1,6 @@
+{
+  "summary":  "Rencana arsitektur peningkatan skala Enterprise SaaS untuk LedgerLine Coffee & Roastery POS & ERP mencakup optimasi SQLite WAL & concurrency, pemisahan domain modular backend, penyimpanan IndexedDB & paginasi data frontend, kompresi upload foto WebP otomatis, Dynamic QRIS webhook, serta cetak struk thermal ESC/POS.",
+  "updatedAt":  "2026-10-30T09:01:05.114670524Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

@@ -10,7 +10,7 @@ import Fastify, { FastifyRequest, FastifyReply } from "fastify";
 import fastifyCors from "@fastify/cors";
 import fastifyHelmet from "@fastify/helmet";
 import fastifyStatic from "@fastify/static";
-import { prisma } from "./server/lib/prisma.ts";
+import { prisma, initSqlitePragmas } from "./server/lib/prisma.ts";
 import { ssotRoutes } from "./server/routes/ssot.routes.ts";
 import { kitchenRoutes } from "./server/routes/kitchen.routes.ts";
 import { authRoutes } from "./server/routes/auth.routes.ts";
@@ -28,13 +28,19 @@ import { startOfflineSyncWorker } from "./server/workers/offlineSyncWorker.ts";
 import { startOutboxWorker } from "./server/workers/outboxWorker.ts";
 import { startDailyClosingCron } from "./server/workers/dailyClosingWorker.ts";
 import { validateEnv } from "./server/src/utils/envValidator.ts";
+import { sanitizeRequestHook } from "./server/middlewares/sanitize.ts";
+import { ensureEnterpriseProvisioning } from "./server/services/tenantContext.service.ts";
 
 export async function createApp() {
   validateEnv();
 
   const fastify = Fastify({
     logger: true,
+    bodyLimit: 15 * 1024 * 1024, // 15MB to support CSV/JSON backup & menu image uploads
   });
+
+  // Global Input Sanitization Hook (runs before route handlers)
+  fastify.addHook("preValidation", sanitizeRequestHook);
 
   // Global Error Handler
   fastify.setErrorHandler((error: any, request: FastifyRequest, reply: FastifyReply) => {
@@ -126,6 +132,12 @@ export async function createApp() {
 
 async function startServer() {
   const PORT = 3000;
+  try {
+    await initSqlitePragmas();
+    await ensureEnterpriseProvisioning();
+  } catch (err: any) {
+    console.warn("⚠️ Initial enterprise provisioning warning:", err.message);
+  }
   const app = await createApp();
 
   try {

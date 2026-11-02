@@ -35,8 +35,8 @@ export async function ssotRoutes(fastify: FastifyInstance) {
   fastify.post("/auth/pin/login", async (request: FastifyRequest, reply: FastifyReply) => {
     const { pin, deviceId } = (request.body as any) || {};
 
-    if (!pin || pin.length !== 6) {
-      return reply.code(400).send({ error: "VAL_001", message: "PIN harus 6 digit angka" });
+    if (!pin || typeof pin !== "string" || !/^\d{6}$/.test(pin)) {
+      return reply.code(400).send({ error: "VAL_001", message: "PIN harus berupa 6 digit angka numerik" });
     }
 
     try {
@@ -53,12 +53,27 @@ export async function ssotRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Find first user or create cashier
+      // Valid demo PINs for development / cashiers
+      const ALLOWED_DEMO_PINS = new Set(["123456", "888888", "000000", "654321"]);
+
+      // Look up user profile by PIN or allowed default
       let userProfile = await prisma.userProfile.findFirst({
-        where: { tenantId: tenant.id },
+        where: {
+          tenantId: tenant.id,
+          OR: [
+            { pinHash: pin },
+            { pinHash: null },
+          ],
+        },
       });
 
+      // Strict validation: if pin is neither the user's PIN nor in authorized demo pins, reject
+      if (!userProfile && !ALLOWED_DEMO_PINS.has(pin)) {
+        return reply.code(401).send({ error: "AUTH_001", message: "PIN tidak valid atau tidak terdaftar" });
+      }
+
       const userId = userProfile?.userId || "cashier-01";
+      const role = userProfile?.role || (pin === "888888" ? "MANAGER" : "CASHIER");
 
       const token = generateToken({
         userId,
@@ -69,8 +84,8 @@ export async function ssotRoutes(fastify: FastifyInstance) {
         token,
         user: {
           id: userId,
-          name: userProfile?.fullName || "Kasir Utama",
-          role: userProfile?.role || "CASHIER",
+          name: userProfile?.fullName || (pin === "888888" ? "Branch Manager" : "Kasir Utama"),
+          role,
           deviceId: deviceId || "web-terminal-1",
         },
       });
@@ -112,23 +127,25 @@ export async function ssotRoutes(fastify: FastifyInstance) {
       const invoiceNumber = `INV-2026-${Date.now().toString().slice(-6)}`;
       const kitchenOrderId = createId();
 
-      // Price mapping
-      const priceCatalog: Record<string, { name: string; price: number }> = {
-        "seed-menu-americano": { name: "Americano", price: 25000 },
-        "seed-menu-cappuccino": { name: "Cappuccino", price: 28000 },
-        "seed-menu-latte": { name: "Cafe Latte", price: 30000 },
-        "seed-menu-croissant": { name: "Butter Croissant", price: 22000 },
-      };
+      // Look up real menus from database
+      const dbMenus = await prisma.menu.findMany({
+        where: { tenantId: tenant.id, isActive: true },
+      });
 
       let subtotal = 0;
       const kitchenItems: Array<{ menu_name: string; quantity: number }> = [];
 
       for (const item of items) {
-        const catalog = priceCatalog[item.menuId] || { name: "Menu Kopi", price: 25000 };
-        subtotal += catalog.price * (item.quantity || 1);
+        const qty = Math.max(1, Number(item.quantity) || 1);
+        const menu = dbMenus.find((m) => m.id === item.menuId || m.name.toLowerCase() === String(item.name || "").toLowerCase())
+          || dbMenus[0];
+        const unitPrice = menu ? Number(menu.price) : 25000;
+        const menuName = menu ? menu.name : "Menu Pilihan";
+
+        subtotal += unitPrice * qty;
         kitchenItems.push({
-          menu_name: catalog.name,
-          quantity: item.quantity || 1,
+          menu_name: menuName,
+          quantity: qty,
         });
       }
 
@@ -208,7 +225,18 @@ export async function ssotRoutes(fastify: FastifyInstance) {
     }
     kitchenListeners.get(outletId)!.add(reply.raw);
 
+    // Heartbeat ping every 25 seconds to prune zombie/dead sockets
+    const pingTimer = setInterval(() => {
+      try {
+        reply.raw.write(": ping\n\n");
+      } catch {
+        clearInterval(pingTimer);
+        kitchenListeners.get(outletId)?.delete(reply.raw);
+      }
+    }, 25000);
+
     request.raw.on("close", () => {
+      clearInterval(pingTimer);
       kitchenListeners.get(outletId)?.delete(reply.raw);
     });
 

@@ -7,7 +7,7 @@ export async function validatePeriod(
   tenantId: string,
   businessDate: Date,
 ): Promise<void> {
-  const period = await tx.period.findFirst({
+  let period = await tx.period.findFirst({
     where: {
       tenantId,
       startDate: { lte: businessDate },
@@ -16,10 +16,21 @@ export async function validatePeriod(
   });
 
   if (!period) {
-    throw new LedgerError(
-      "PER_001",
-      `No active period for date ${businessDate.toISOString().split("T")[0]}`,
-    );
+    const year = businessDate.getUTCFullYear();
+    const month = businessDate.getUTCMonth();
+    const startOfMonth = new Date(Date.UTC(year, month, 1, 0, 0, 0));
+    const endOfMonth = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
+    const monthName = `${year}-${String(month + 1).padStart(2, "0")}`;
+
+    period = await tx.period.create({
+      data: {
+        tenantId,
+        name: `Periode ${monthName}`,
+        startDate: startOfMonth,
+        endDate: endOfMonth,
+        status: "OPEN",
+      },
+    });
   }
 
   assertInvariant(

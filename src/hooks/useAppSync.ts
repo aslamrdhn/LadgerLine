@@ -46,7 +46,19 @@ export function useAppSync(
       if (data.rawMaterials) setRawMaterials(data.rawMaterials);
       if (data.recipes) setRecipes(data.recipes);
       if (data.tables) setTables(data.tables);
-      if (data.orders) setOrders(data.orders);
+      if (Array.isArray(data.orders)) {
+        const currentOrders = useDataStore.getState().orders || [];
+        const unsyncedOffline = currentOrders.filter((o) =>
+          String(o.id || "").startsWith("TX-OFFLINE"),
+        );
+        const serverIds = new Set(
+          data.orders.flatMap((o: any) => [o.id, o.salesId, o.invoiceNumber].filter(Boolean)),
+        );
+        const preservedOffline = unsyncedOffline.filter(
+          (o) => !serverIds.has(o.id),
+        );
+        setOrders([...preservedOffline, ...data.orders]);
+      }
       if (data.financeLogs) setFinanceLogs(data.financeLogs);
       if (data.appConfig) setAppConfig(data.appConfig);
     }

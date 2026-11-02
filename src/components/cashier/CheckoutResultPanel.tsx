@@ -19,6 +19,7 @@ import {
   Building,
   ChevronLeft,
 } from "lucide-react";
+import { escposPrinter } from "../../utils/escposPrinter";
 
 interface CheckoutResultPanelProps {
   setCheckoutResult: (val: any) => void;
@@ -54,6 +55,49 @@ export function CheckoutResultPanel({
   const [qrisPaidStatus, setQrisPaidStatus] = useState<"pending" | "success">(
     "pending",
   );
+  const [dynamicQrisSession, setDynamicQrisSession] = useState<any>(null);
+
+  React.useEffect(() => {
+    if (
+      checkoutResult?.order &&
+      checkoutResult.order.paymentMethod === "QRIS"
+    ) {
+      fetch("/api/payments/qris/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: checkoutResult.order.id,
+          amount: checkoutResult.order.totalPrice,
+          merchantName: appConfig?.storeName || "LEDGERLINE COFFEE",
+        }),
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          if (d?.success && d.session) {
+            setDynamicQrisSession(d.session);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [checkoutResult?.order?.id, checkoutResult?.order?.paymentMethod, appConfig?.storeName]);
+
+  const handleConfirmQrisWebhook = async () => {
+    setQrisPaidStatus("success");
+    if (!checkoutResult?.order) return;
+    try {
+      await fetch("/api/payments/qris/webhook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reference:
+            dynamicQrisSession?.reference || checkoutResult.order.id,
+          orderId: checkoutResult.order.id,
+          status: "PAID",
+        }),
+      });
+    } catch {}
+  };
+
   const [edcStep, setEdcStep] = useState<
     "swipe_insert" | "pin_entry" | "authorizing" | "success"
   >("swipe_insert");
@@ -179,7 +223,56 @@ ${checkoutResult.order.items
 \n\n\n`;
     }
 
-    // Attempt Direct Web Bluetooth ESC/POS if enabled/supported
+    // 1. Direct ESC/POS Hardware Printer (if already paired via USB Serial or Web Bluetooth)
+    if (escposPrinter.getStatus().isConnected) {
+      try {
+        const escBytes = escposPrinter.buildEscPosBytes({
+          storeName: appConfig?.storeName || "LEDGERLINE BY ASLAM",
+          storeAddress: appConfig?.storeAddress || "Indonesia",
+          storePhone: appConfig?.storePhone || "0812-9988-7766",
+          receiptHeader: appConfig?.receiptHeader,
+          receiptFooter: appConfig?.receiptFooter,
+          orderId: checkoutResult.order.id,
+          orderTime: checkoutResult.order.orderTime,
+          tableNumber: checkoutResult.order.tableNumber || "Takeaway",
+          paymentMethod: checkoutResult.order.paymentMethod,
+          items: checkoutResult.order.items.map((item: any) => {
+            const prod = products.find((p) => p.id === item.productId);
+            return {
+              name: prod?.name || "Menu Item",
+              quantity: item.quantity,
+              price: item.priceAtSale,
+              notes: item.notes,
+            };
+          }),
+          subtotal: checkoutResult.order.subtotal,
+          discount: checkoutResult.order.discount,
+          taxLabel: `${taxLabel} (${taxPercent}%)`,
+          tax: checkoutResult.order.tax,
+          totalPrice: checkoutResult.order.totalPrice,
+          securityHash: checkoutResult.order.secureHash,
+          paperWidth,
+          isKitchenTicket: (receiptType as string) === "kitchen",
+        });
+
+        const printed = await escposPrinter.printRawBytes(escBytes);
+        if (printed) {
+          setTempPrinterLog((prev) => [
+            ...prev,
+            `Struk berhasil dicetak langsung melalui ESC/POS Hardware (${escposPrinter.getStatus().deviceName})!`,
+          ]);
+          setPrintingStatus(false);
+          return;
+        }
+      } catch (hwErr: any) {
+        setTempPrinterLog((prev) => [
+          ...prev,
+          `Info ESC/POS: ${hwErr.message}`,
+        ]);
+      }
+    }
+
+    // 2. Attempt Direct Web Bluetooth ESC/POS if enabled/supported
     if (
       (navigator as any).bluetooth &&
       selectedPrinterModel.toLowerCase().includes("bluetooth")
@@ -750,7 +843,10 @@ ${checkoutResult.order.items
                   ) : (
                     <>
                       <img
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=1e293b&data=00020101021226500016ID.CO.ASLAM.LEDGER011893075200026207015512345678901235204581153033605406${checkoutResult.order.totalPrice}5802ID5915ASLAM%20LEDGER%20POS6007JAKARTA6304`}
+                        src={
+                          dynamicQrisSession?.qrImageUrl ||
+                          `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=1e293b&data=00020101021226500016ID.CO.ASLAM.LEDGER011893075200026207015512345678901235204581153033605406${checkoutResult.order.totalPrice}5802ID5915ASLAM%20LEDGER%20POS6007JAKARTA6304`
+                        }
                         alt="Dynamic QRIS QR Code"
                         referrerPolicy="no-referrer"
                         className="w-36 h-36"
@@ -788,7 +884,7 @@ ${checkoutResult.order.items
                 <div className="w-full space-y-1 bg-slate-50 p-2 rounded-lg border border-slate-200">
                   {qrisPaidStatus === "pending" ? (
                     <button
-                      onClick={() => setQrisPaidStatus("success")}
+                      onClick={handleConfirmQrisWebhook}
                       className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[9px] uppercase tracking-wider rounded-md transition-all flex items-center justify-center gap-1 cursor-pointer shadow-xs shadow-emerald-500/10 animate-fade-in"
                     >
                       <CheckCircle2 size={11} />

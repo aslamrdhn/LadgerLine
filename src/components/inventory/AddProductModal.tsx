@@ -56,16 +56,79 @@ export function AddProductModal({
     }
   }, [productToEdit, isOpen]);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        triggerToast("Gambar terlalu besar! Maksimum ukuran file adalah 2MB");
-        return;
-      }
+  const compressImageToWebP = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onloadend = () => setImageUrl(reader.result as string);
+      reader.onerror = () => reject(new Error("Gagal membaca berkas gambar"));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("Berkas bukan gambar yang valid"));
+        img.onload = () => {
+          const maxDim = 800;
+          let width = img.width;
+          let height = img.height;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            resolve(reader.result as string);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          const webpDataUrl = canvas.toDataURL("image/webp", 0.82);
+          resolve(webpDataUrl);
+        };
+        img.src = reader.result as string;
+      };
       reader.readAsDataURL(file);
+    });
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 8 * 1024 * 1024) {
+      triggerToast("Gambar terlalu besar! Maksimum ukuran file adalah 8MB");
+      return;
+    }
+
+    try {
+      const compressedWebp = await compressImageToWebP(file);
+      // Immediately set preview while uploading to server media storage
+      setImageUrl(compressedWebp);
+
+      try {
+        const res = await fetch("/api/media/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            imageData: compressedWebp,
+            prefix: name ? name.slice(0, 16) : "menu",
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.imageUrl) {
+            setImageUrl(data.imageUrl);
+            triggerToast("Foto menu berhasil dikompresi (WebP) & diunggah!");
+          }
+        }
+      } catch {
+        // Offline fallback keeps the lightweight compressed WebP DataURL
+      }
+    } catch (err: any) {
+      triggerToast(err.message || "Gagal memproses gambar");
     }
   };
 
@@ -82,7 +145,7 @@ export function AddProductModal({
     const payload: Product = {
       id: productToEdit ? productToEdit.id : `prod-${Date.now()}`,
       name: name.trim(),
-      category,
+      category: category as Product["category"],
       price: Number(price),
       costPrice: Number(costPrice),
       stock: Number(stock),
